@@ -31,9 +31,10 @@ jobs:
 
       - name: Configure Theos and iOS SDK
         run: |
-          rm -rf "$HOME/theos"
-          ln -s "$GITHUB_WORKSPACE/theos" "$HOME/theos"
-          "$HOME/theos/bin/install-sdk" iPhoneOS16.5
+          export THEOS="$GITHUB_WORKSPACE/theos"
+          ln -s "$THEOS" "$HOME/theos"
+          cd "$THEOS"
+          ./bin/install-sdk iPhoneOS16.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
