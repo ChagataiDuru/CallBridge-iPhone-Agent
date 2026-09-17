@@ -113,9 +113,9 @@ CallBridge-iPhone-Agent/
 ├── scripts/
 │   ├── iphone/     # Capture helpers that run on the device
 │   └── mac/        # Fetch and verification helpers that run on the Mac
-├── evidence/
-│   ├── private/    # Raw evidence with real numbers and audio (never committed)
-│   └── sanitized/  # Redacted, shareable text logs
+├── evidence/       # Call test evidence (local only)
+│   ├── private/    # Raw evidence with real numbers and audio
+│   └── sanitized/  # Logs with numbers redacted, for local review and manual sharing
 ├── reports/        # Device and static-analysis reports (local only)
 ├── research/       # Extracted third-party app content (local only)
 └── artifacts/      # Built .deb packages and archives (local only)
@@ -123,9 +123,9 @@ CallBridge-iPhone-Agent/
 
 ## Privacy
 
-Real phone numbers and call audio never enter Git. `evidence/private/`, `reports/`, `research/`
-and `artifacts/` are local-only by `.gitignore`; only `evidence/sanitized/` text logs are tracked,
-with numbers replaced by `[REDACTED_PHONE]`. See [docs/PRIVACY.md](docs/PRIVACY.md).
+Real phone numbers and call audio never enter Git. The whole of `evidence/`, along with `reports/`,
+`research/` and `artifacts/`, is local-only by `.gitignore` — no call evidence is published from
+this repository, masked or otherwise. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Roadmap
 
