@@ -1,9 +1,13 @@
-Package: audio-commands
-Name: Audio Commands
-Version: 0.1
-Section: Scripting
+Package: com.callbridge.cli
+Name: CallBridge CLI
+Version: 0.2
+Section: Utilities
 Depends: firmware (>= 13.0)
 Architecture: iphoneos-arm
 Author: Lessica <82flex@gmail.com>
-Maintainer: Lessica <82flex@gmail.com>
-Description: Something shamefully stolen from the Internet.
+Maintainer: ChagataiDuru <https://github.com/ChagataiDuru>
+Conflicts: audio-commands
+Replaces: audio-commands
+Provides: audio-commands
+Description: TrollRecorder command-line tools with CallBridge cellular call control.
+Homepage: https://github.com/ChagataiDuru/CallBridge-iPhone-Agent

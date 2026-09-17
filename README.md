@@ -1,144 +1,153 @@
-# TrollRecorder
+# CallBridge iPhone Agent
 
-Not the first, but the best phone call recorder with [TrollStore](https://ios.cfw.guide/installing-trollstore/).
+CallBridge turns a jailbroken iPhone into a cellular call endpoint that a **stock, non-rooted
+Android phone** drives over the local network — incoming call display, answer/reject/hang up, and
+two-way audio, with no cloud service in the path.
 
-[now-on-havoc]: https://havoc.app/package/trollrecorder
+This repository holds the **iPhone side**: rootless command-line tools, the call-control prototype,
+on-device test helpers, and the engineering documentation.
 
-[<img width="150" src="https://docs.havoc.app/img/badges/get_square.svg" alt="Get It On Havoc" />][now-on-havoc]
+It is a fork of [Lessica/TrollRecorder](https://github.com/Lessica/TrollRecorder)'s open CLI core.
+See [docs/UPSTREAM_TROLLRECORDER.md](docs/UPSTREAM_TROLLRECORDER.md) for what was inherited, what
+was added, and licensing.
 
-![Screenshot](./res/screenshot.png)
+> Project documentation under `docs/` is currently written in Turkish.
 
-- Supports iOS 15.0 to iOS 17.0
-- **No iOS 14 support.**
+## Target setup
 
-## Jailbreak Version
+| | |
+|---|---|
+| **Cellular end** | iPhone 7 (`iPhone9,3`), iOS 15.8.8, rootless jailbreak (`/var/jb`) |
+| **Client** | Xiaomi 15, stock Android, no root required |
+| **Link** | Same Wi-Fi or the phone's hotspot; no cloud dependency |
+| **Function** | Show the incoming call and caller on Android, answer/reject/hang up, talk both ways |
 
-Popular jailbreaks are also supported. Get [TrollRecorder JB](https://havoc.app/package/trollrecorderjb).
+## Status — 18 September 2026
 
-- [RootHide](https://github.com/roothide/Dopamine2-roothide)
-- [Dopamine](https://github.com/opa334/Dopamine) / [palera1n](https://palera.in/)
+Two of the first technical risks are verified on real hardware:
 
-## ⚠️ Not Supported
+1. **Call events.** Incoming calls, the caller's number, and the `Incoming → Answered → Ended`
+   transitions are captured through CoreTelephony.
+2. **Downlink audio.** The far end of a live cellular call is recorded cleanly from the
+   speaker/downlink channel via `ATAudioTap`.
 
-- There is no additional support for [Bootstrap (RootHide)](https://github.com/roothide/Bootstrap) nor [NathanLR](https://github.com/verygenericname/nathanlr).
-  - Use TrollStore version instead.
-- [eSign](https://twitter.com/EsignPatch) or [LiveContainer](https://github.com/khanhduytran0/LiveContainer) are not supported due to their own limitations.
+The successful test produced a 29.234 s, 44.1 kHz, stereo Float32 PCM CAF file for a ~30 s call.
+QuickTime opened it directly and the far end was clearly audible.
 
-## Pro Version
+The `call-control` prototype (`status` / `answer` / `hangup`) is written and builds; rootless
+packaging and on-device validation are the next step.
 
-Core features of TrollRecorder are free to use. You can buy a Pro license to unlock advanced features.  
-Paid licenses are valid for lifetime, and up to 5 devices.
+**The biggest open risk is uplink injection** — pushing audio from Android into the cellular
+microphone/uplink path. Capturing the microphone channel is proven; injecting into it is not, and
+nothing in this repo should assume it works. If that gate fails, remote notification, remote
+control, and listen-only features remain viable, but real two-way conversation does not.
 
-## Special Thanks
+Full verification matrix: [docs/STATUS.md](docs/STATUS.md).
 
-- [TrollStore](https://github.com/opa334/TrollStore) and [Dopamine](https://github.com/opa334/Dopamine) by [@opa334dev](https://twitter.com/opa334dev)
-- [AudioRecorder XS](https://limneos.net/audiorecorderxs/) by [@limneos](https://twitter.com/limneos)
-- [CallAssist](https://buy.htv123.com) by [@xybp888](https://github.com/xybp888)
+## Tools
 
-## Translators
+All tools build into a single rootless `.deb` and install to `/var/jb/usr/local/bin`.
 
-Except for English and Simplified Chinese, all other localizations were generated or reviewed by DeepSeek v4. Some source text was provided by volunteer translators listed below.
+| Tool | Purpose |
+|---|---|
+| `call-monitor` | Streams CoreTelephony and CallKit call events |
+| `call-control` | `status`, `answer`, `hangup` — emits a single JSON object |
+| `call-recorder` | Records the `speaker` (downlink) or `microphone` (uplink) channel to CAF |
+| `audio-recorder` / `audio-player` / `audio-mixer` | Upstream general-purpose audio utilities |
+| `dtmf-decoder` | Upstream DTMF decoder |
 
-- Spanish source text by [**@Deci8BelioS**](https://github.com/Deci8BelioS)
-- French source text by [**DzMoha**](https://twitter.com/contact_nadhir)
-- Korean source text by **SUB2**
-- Russian source text by [**RAYMONCE**](https://t.me/raymonce)
-- Turkish source text by [**Altay T.**](https://x.com/yamenhuu)
-- Uyghur source text by **BlacЖinG**
-- Vietnamese source text by [**@romlayvn-0411**](https://github.com/romlayvn-0411) and [**2311WithLuv**](https://www.facebook.com/If2019)
-- Traditional Chinese (Hong Kong) source text by [**@CaslenZ**](https://github.com/CaslenZ)
-- Traditional Chinese (Taiwan) source text by [**雲端戰神一刀秒**](https://github.com/mp614t)
+`call-control` is one-shot and machine-readable. Phone numbers are redacted by default; pass
+`status --include-address` to see them. `answer` and `hangup` act only when exactly one matching
+cellular call exists, and verify the observed state transition before reporting success.
 
-## Localization
+Exit codes: `0` success, `2` usage error, `3` no matching call, `4` transition verification
+timeout, `5` ambiguous call selection.
 
-At minimum, a localization should include `Localizable.strings` and `InfoPlist.strings`. Example: [Localizable.strings](https://github.com/Lessica/TrollRecorder/blob/main/res/en.lproj/Localizable.strings).
+```sh
+call-control status
+call-control status --include-address
+call-control answer --timeout-ms 10000
+call-control hangup
+```
 
-**🙇 PLEASE HELP REVIEW LLM-GENERATED LOCALIZATIONS!**
+## Build
 
-## Privacy Policy
+The package is built with Theos. CI is the recommended path: run
+[`.github/workflows/build-rootless.yml`](.github/workflows/build-rootless.yml) via
+`workflow_dispatch` and download the `callbridge-cli-rootless` artifact.
 
-See [Privacy Policy](./PrivacyPolicy.md).
+Locally, on macOS with Theos installed:
 
-## End-User License Agreement
+```sh
+source devkit/rootless.sh          # rootless scheme; use devkit/roothide.sh for roothide
+FINALPACKAGE=1 gmake clean package # output in packages/*.deb
+```
 
-See [E.U.L.A.](./EULA.md).
+Install and smoke-test on the device:
+
+```sh
+scp packages/*.deb mobile@<iphone-ip>:/var/mobile/
+ssh mobile@<iphone-ip> 'sudo dpkg -i /var/mobile/<package>.deb'
+ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/call-control status'
+```
+
+## On-device testing
+
+```sh
+scp scripts/iphone/*.sh mobile@<iphone-ip>:/var/mobile/
+ssh mobile@<iphone-ip> 'sudo sh /var/mobile/start-duplex-capture.sh'
+# place a call, talk, hang up
+ssh mobile@<iphone-ip> 'sudo sh /var/mobile/stop-capture.sh'
+sh scripts/mac/fetch-latest-run.sh <iphone-ip>   # pulls the run into evidence/private/
+```
+
+Numbered test cases, procedures and acceptance criteria live in [docs/TESTING.md](docs/TESTING.md).
+
+## Repository layout
+
+```text
+CallBridge-iPhone-Agent/
+├── cli/            # Objective-C++ CLI sources and their entitlement plists
+├── include/        # Private CoreTelephony and ATAudioTap headers
+├── layout/DEBIAN/  # Debian package metadata
+├── devkit/         # Theos environment schemes (rootless, roothide)
+├── docs/           # Status, architecture, roadmap, testing and privacy docs
+├── scripts/
+│   ├── iphone/     # Capture helpers that run on the device
+│   └── mac/        # Fetch and verification helpers that run on the Mac
+├── evidence/
+│   ├── private/    # Raw evidence with real numbers and audio (never committed)
+│   └── sanitized/  # Redacted, shareable text logs
+├── reports/        # Device and static-analysis reports (local only)
+├── research/       # Extracted third-party app content (local only)
+└── artifacts/      # Built .deb packages and archives (local only)
+```
+
+## Privacy
+
+Real phone numbers and call audio never enter Git. `evidence/private/`, `reports/`, `research/`
+and `artifacts/` are local-only by `.gitignore`; only `evidence/sanitized/` text logs are tracked,
+with numbers replaced by `[REDACTED_PHONE]`. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## Roadmap
+
+1. **Phase 1 — Call control + duplex capture.** Capture `speaker` and `microphone` simultaneously
+   during one call; validate `call-control answer` / `hangup` on the device.
+2. **Phase 2 — Uplink injection gate.** Determine whether generated PCM can reach the telephony
+   uplink without acoustic playback.
+3. **Phase 3 — `callbridge-agent`.** One long-lived service publishing JSON events over an
+   authenticated local WebSocket, persistent via a rootless LaunchDaemon.
+4. **Phase 4 — Android PoC.** Kotlin/Compose client.
+
+Details: [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Scope and legal notice
+
+This is a research and feasibility project carried out on hardware owned by the author. Call
+recording and access to call content are regulated in many jurisdictions; complying with local law
+is the user's responsibility. No real phone numbers or call audio are distributed in this
+repository.
 
 ## License
 
-The core of TrollRecorder (command line tool / CLI), and only itself, is open-sourced here.
-
-The command line tools of TrollRecorder are [Free Software](https://www.gnu.org/philosophy/free-sw.html) licensed under the [GNU General Public License](LICENSE).
-
-## 解锁全部功能
-
-- 🌟 超过 50 个高级功能
-- 🌟 绑定 Havoc 账号，在多达 5 台设备上同时使用
-- 🌟 无订阅，无额外付费，一次购买终身可用
-- 🌟 安全的支付方式
-- 🌟 精英群技术支持
-
-➡️ [购买巨魔版](https://havoc.app/package/trollrecorder) ➡️ [购买越狱版](https://havoc.app/package/trollrecorderjb)
-
-### 免费版 vs 正式版
-
-| 功能 | 免费版 | 正式版 | 备注 |
-|------|------|------|------|
-| 　 语音备忘录 | 　✅ | 　✅ | 录制环境音 |
-| 　 基础通话录音 | 　✅ | 　✅ | 电话与 FaceTime 录音 |
-| 　 CallKit 录音 | 　✅ | 　✅ | 支持 CallKit 的第三方 App 录音 |
-| 　 微信和其他 App 录音 | 　✅ | 　✅ | 非 CallKit 的第三方 App 录音 |
-| 　 系统音频录制 | | 　✅ | 录制设备发出的声音 |
-| 👍 微信通话助理 | | 　✅ | 获取并显示微信的联系人备注 |
-| 👍 首次解锁后启动 | | 　✅ | 需将小组件添加到锁定屏幕或主屏幕 |
-| 👍 稳定持久不漏录 | | 　✅ | 需将小组件添加到锁定屏幕或主屏幕 |
-| 👍 优秀的功耗控制 | 　✅ | 　✅ | 基于事件驱动，对续航影响极小 |
-| 　 通知与提醒 | 　✅ | 　✅ | 振动、触感反馈和推送通知 |
-| 　 位置服务 | 　✅ | 　✅ | 记录录音时的地理位置 |
-| 　 悬浮球 | 　✅ | 　✅ | 精美的服务和录音状态指示器 |
-| 　 悬浮球+ | | 　✅ | 自定义悬浮球尺寸、样式和效果 |
-| 　 显示与外观 | | 　✅ | 多点图标，多点新意 |
-| 　 自定义分享 | | 　✅ | 分享录音时携带详细信息，自定义文件名称 |
-| 　 回收站 | | 　✅ | 世上没有后悔药，但我们有 |
-| 👍 个人收藏/过期清理 | | 　✅ | 小容量 iPhone 的福音 |
-| 👍 智能云归档 | | 　✅ | 充分利用 iCloud 云盘归档过往录音 |
-| 👍 通过 iCloud 备份 | | 　✅ | 跟随 iCloud 整机增量备份 |
-| 👍 组合模式/保留通道 | | 　✅ | 分别保留和听取扬声器和麦克风通道 |
-| 　 多种文件和音频格式 | | 　✅ | 支持 m4a/caf/wav，支持 aac 编码 |
-| 　 自定义采样率 | | 　✅ | 更好的音频质量 |
-| 　 触控/面容 ID | | 　✅ | |
-| 　 隐秘语音备忘录 | | 　✅ | 让语音备忘录保持隐身录制 |
-| 　 电话/联系人联动 | | 　✅ | 仅越狱版提供，在「最近通话」中查看关联录音 |
-| 　 更多网络存储 | | 　✅ | Google Drive / Microsoft OneDrive / Dropbox |
-
-### 巨魔版 vs 越狱版
-
-| 功能 | 巨魔版 | 越狱版 | 备注 |
-|------|------|------|------|
-| 稳定持久不漏录 | 　✅ | 　✅ | |
-| 首次解锁后启动 | 　✅ | | 需将小组件添加到锁定屏幕或主屏幕 |
-| 越狱后自启动 | | 　✅ | |
-| 隐秘语音备忘录 | 　✅ | 　✅ | 让语音备忘录保持隐身录制 |
-| 电话/联系人联动 | | 　✅ | 在「最近通话」中查看关联录音 |
-
-### 智能云归档 vs 通过 iCloud 备份
-
-| 特性 | 智能云归档 | 通过 iCloud 备份 |
-|------|------|------|
-| 位置 | iCloud 云盘 | iCloud 备份 |
-| 前提条件 | ✅ iCloud 套餐空间足够<br>✅ 设置 -> Apple ID -> iCloud -> 打开「iCloud 云盘」 | ✅ iCloud 套餐空间足够<br>✅ 设置 -> Apple ID -> iCloud -> 打开「iCloud 云备份」 |
-| 开启方式 | App -> 设置 -> 内容共享 -> 打开「智能云归档」 | App -> 设置 -> 本地存储 -> 打开「通过 iCloud 备份」 |
-| 范围 | ⚠️ 除当前月份外的所有月份的录音 | ✅ 所有录音 |
-| 在「文件」中查看 | ✅ | ✅ |
-| 按月整理 | ✅ | ✅ |
-| 只增不删 | ✅ | ⚠️ 跟随本地录音增删改 |
-| 自定义归档名称 | ✅ | ⚠️ 原始文件名称 |
-| 不占用额外存储空间 | ✅ APFS 克隆 | ✅ 硬链接 |
-
-### 网络存储模式
-
-| 模式 | 可恢复 | 描述 |
-|------|------|------|
-| 归档 | | 使用 “内容共享” → “自定义导出名称” **重命名** 混合和组合模式的本地录音并上传到云盘。你可以在云盘上按月查看、按备注后的文件名搜索录音。被 “归档” 到云盘的录音无法恢复到巨魔录音机 App 当中。 |
-| 上传 | ✅ | 将本地录音（包含分离通道）和元数据以初始形态上传到云盘，云盘上的录音 **只增不删**。你可以通过 “双向同步” 或手动迁移将这些录音恢复到巨魔录音机 App 当中。 |
-| 同步 | ✅ | 在 “上传” 的基础之上：如果你删除了本地录音，云盘上对应的录音也会被删除（或移动到云盘的回收站）。 |
-| 双向同步 | ✅ | 在 “同步” 的基础之上：如果你删除了云盘上的录音，本地对应的录音也会被删除（不会移动到回收站），云盘上的录音和本地始终保持一致。 |
+Like the upstream CLI core, this repository is licensed under the GNU AGPL v3 — see [LICENSE](LICENSE).

@@ -7,6 +7,7 @@ INSTALL_TARGET_PROCESSES += audio-mixer
 
 INSTALL_TARGET_PROCESSES += call-recorder
 INSTALL_TARGET_PROCESSES += call-monitor
+INSTALL_TARGET_PROCESSES += call-control
 
 INSTALL_TARGET_PROCESSES += dtmf-decoder
 
@@ -18,6 +19,7 @@ TOOL_NAME += audio-mixer
 
 TOOL_NAME += call-recorder
 TOOL_NAME += call-monitor
+TOOL_NAME += call-control
 
 TOOL_NAME += dtmf-decoder
 
@@ -65,6 +67,15 @@ call-monitor_CCFLAGS += -std=gnu++17
 call-monitor_CODESIGN_FLAGS += -Scli/call-monitor.plist
 call-monitor_FRAMEWORKS += Foundation CallKit CoreTelephony
 call-monitor_INSTALL_PATH += /usr/local/bin
+
+call-control_USE_MODULES := 0
+call-control_FILES += cli/call-control.mm
+call-control_CFLAGS += -fobjc-arc
+call-control_CFLAGS += -Iinclude
+call-control_CCFLAGS += -std=gnu++17
+call-control_CODESIGN_FLAGS += -Scli/call-control.plist
+call-control_FRAMEWORKS += Foundation CoreTelephony
+call-control_INSTALL_PATH += /usr/local/bin
 
 dtmf-decoder_USE_MODULES := 0
 dtmf-decoder_FILES += cli/dtmf-decoder.mm
