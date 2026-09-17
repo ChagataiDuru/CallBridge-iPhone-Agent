@@ -11,8 +11,6 @@ It is a fork of [Lessica/TrollRecorder](https://github.com/Lessica/TrollRecorder
 See [docs/UPSTREAM_TROLLRECORDER.md](docs/UPSTREAM_TROLLRECORDER.md) for what was inherited, what
 was added, and licensing.
 
-> Project documentation under `docs/` is currently written in Turkish.
-
 ## Target setup
 
 | | |

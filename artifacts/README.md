@@ -1,7 +1,7 @@
-# Derleme çıktıları
+# Build outputs
 
-- `packages/`: rootless `.deb` paketleri
-- `archives/`: kaynak ve paket arşivleri
+- `packages/`: rootless `.deb` packages
+- `archives/`: source and package archives
 
-İçerik **Git'e alınmaz**. Paylaşılabilir paketler `.github/workflows/build-rootless.yml`
-akışının GitHub Actions artifact'larından alınır; ikili dosyalar depoda tutulmaz.
+The content is **not tracked by Git**. Shareable packages are taken from the GitHub Actions
+artifacts of `.github/workflows/build-rootless.yml`; binaries are not kept in the repository.
