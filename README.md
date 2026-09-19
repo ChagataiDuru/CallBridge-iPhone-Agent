@@ -20,25 +20,28 @@ was added, and licensing.
 | **Link** | Same Wi-Fi or the phone's hotspot; no cloud dependency |
 | **Function** | Show the incoming call and caller on Android, answer/reject/hang up, talk both ways |
 
-## Status — 18 September 2026
+## Status — 19 September 2026
 
-Two of the first technical risks are verified on real hardware:
+Three of the early technical risks are settled on real hardware:
 
 1. **Call events.** Incoming calls, the caller's number, and the `Incoming → Answered → Ended`
    transitions are captured through CoreTelephony.
 2. **Downlink audio.** The far end of a live cellular call is recorded cleanly from the
-   speaker/downlink channel via `ATAudioTap`.
+   speaker/downlink channel via `ATAudioTap` — a 29.234 s, 44.1 kHz, stereo Float32 PCM CAF file,
+   audibly correct.
+3. **Call control.** A full incoming call was answered and ended by command without touching the
+   screen: `ringing → active` in **54 ms**, `active → ended` in **109 ms**.
 
-The successful test produced a 29.234 s, 44.1 kHz, stereo Float32 PCM CAF file for a ~30 s call.
-QuickTime opened it directly and the far end was clearly audible.
+Current work is the `callbridge-agent` service and its control protocol, defined in
+[docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-The `call-control` prototype (`status` / `answer` / `hangup`) is written and builds; rootless
-packaging and on-device validation are the next step.
-
-**The biggest open risk is uplink injection** — pushing audio from Android into the cellular
-microphone/uplink path. Capturing the microphone channel is proven; injecting into it is not, and
-nothing in this repo should assume it works. If that gate fails, remote notification, remote
-control, and listen-only features remain viable, but real two-way conversation does not.
+Two things are **blocked on hardware**. The reference iPhone 7's audio IC has failed — calls
+connect and the state machine works, but no audio passes in either direction. That makes duplex
+capture impossible to validate on this device, and it puts the project's biggest open risk,
+**uplink injection**, out of reach until the device is repaired or replaced. Capturing the
+microphone channel was never proven; injecting into it is a separate question again, and nothing
+in this repo should assume either works. Call notification and remote control remain fully
+viable regardless.
 
 Full verification matrix: [docs/STATUS.md](docs/STATUS.md).
 
@@ -136,13 +139,14 @@ this repository, masked or otherwise. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## Roadmap
 
-1. **Phase 1 — Call control + duplex capture.** Capture `speaker` and `microphone` simultaneously
-   during one call; validate `call-control answer` / `hangup` on the device.
-2. **Phase 2 — Uplink injection gate.** Determine whether generated PCM can reach the telephony
-   uplink without acoustic playback.
-3. **Phase 3 — `callbridge-agent`.** One long-lived service publishing JSON events over an
-   authenticated local WebSocket, persistent via a rootless LaunchDaemon.
-4. **Phase 4 — Android PoC.** Kotlin/Compose client.
+1. **Phase 1 — Call control + duplex capture.** Control half done; duplex capture blocked on
+   hardware.
+2. **Phase 2 — Uplink injection gate.** Blocked on hardware. Can generated PCM reach the telephony
+   uplink without acoustic playback?
+3. **Phase 3 — `callbridge-agent`.** Active. One long-lived service publishing call events and
+   accepting commands over an authenticated NDJSON connection, persistent via a rootless
+   LaunchDaemon. Protocol: [docs/PROTOCOL.md](docs/PROTOCOL.md).
+4. **Phase 4 — Android PoC.** Kotlin/Compose client, in its own repository.
 
 Details: [docs/ROADMAP.md](docs/ROADMAP.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

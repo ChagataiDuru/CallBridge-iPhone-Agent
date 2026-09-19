@@ -1,6 +1,6 @@
 # Project status and evidence
 
-Last updated: **18 September 2026**
+Last updated: **19 September 2026**
 
 ## Verification matrix
 
@@ -11,11 +11,11 @@ Last updated: **18 September 2026**
 | Call state transitions | Verified | `Incoming → Answered → Incoming Ended` | Reduce to a single state machine |
 | Receive CallKit events | Verified | CallKit notifications for the same call | Correlate with CoreTelephony |
 | Capture downlink/far-end audio | Verified | 29.234 s CAF; confirmed by listening | Try live framing |
-| Capture microphone/uplink audio | Pending | The CLI supports the `microphone` channel | Simultaneous dual-channel test |
-| Answer a call programmatically | Prototype ready, device test pending | `cli/call-control.mm`; `CTCallAnswer` | Build the rootless package and test `call-control answer` |
-| Hang up a call programmatically | Prototype ready, device test pending | `cli/call-control.mm`; `CTCallDisconnect` | Build the rootless package and test `call-control hangup` |
-| Inject Android audio into the uplink | Critical research | The current CLI only captures | Validate an audio tap/output path experimentally |
-| Local network control channel | Design | Not implemented yet | Authenticated WebSocket prototype |
+| Capture microphone/uplink audio | Blocked by hardware | CB-002 produced header-only CAF files because the call carried no audio in either direction | Repeat on a device with a working audio path |
+| Answer a call programmatically | Verified | CB-003: `ringing → active` in 54 ms, stable | Expose as an agent command |
+| Hang up a call programmatically | Verified | CB-003: `active → ended` in 109 ms | Expose as an agent command |
+| Inject Android audio into the uplink | Critical research, blocked by hardware | The current CLI only captures | Validate an audio tap/output path once audio works |
+| Local network control channel | Design complete | [PROTOCOL.md](PROTOCOL.md) | Implement the agent's NDJSON listener |
 | Live downlink streaming | Design | Capture-to-file is proven | Publish PCM frames to a socket |
 | Persistence across reboots | Design | A rootless LaunchDaemon is viable | Prepare the `callbridge-agent` plist |
 | Stock Android client | Design | Not implemented yet | Kotlin foreground service + Compose screen |
@@ -35,6 +35,48 @@ Last updated: **18 September 2026**
 
 The file duration matching the active conversation closely is strong evidence that the `speaker`
 tap starts producing audio when the call becomes active and stops when the call ends.
+
+## Programmatic call control — 19 September 2026
+
+A full incoming call was handled without touching the screen (test CB-003):
+
+| Command | Transition | Latency |
+|---|---|---|
+| `call-control answer` | `ringing → active` | **54 ms**, then stable for 1042 ms |
+| `call-control hangup` | `active → ended` | **109 ms** |
+
+Both results were confirmed by a second, independent `call-control status` process and by the
+`call-monitor` event log. Answering is measured from issuing `CTCallAnswer` to observing the
+`active` state, so ~54 ms is the real cost of the telephony operation; the rest of the end-to-end
+latency budget belongs to the network and the Android client.
+
+Getting there required fixing how the transition is observed. `CTCopyCurrentCalls` reads a
+client-side cache that CoreTelephony refreshes through notifications, so the original verification
+loop — polling that function while sleeping — kept reading the snapshot taken at process start and
+reported a call as still ringing for the whole timeout, long after it had been answered and ended.
+The tool now registers a `CTTelephonyCenter` observer and drives the run loop, and treats the
+notification as authoritative. Any long-lived process built on these APIs needs the same
+treatment.
+
+## Device audio fault — 19 September 2026
+
+The reference iPhone 7 has lost its audio path. Calls connect and the call state machine works
+perfectly, but no audio passes in either direction and the speaker button is greyed out and
+unresponsive. These are the classic symptoms of the iPhone 7 audio IC failure known as "loop
+disease", where the solder joints under the audio IC crack.
+
+This is a hardware fault, not a regression in this project: the CB-001 downlink capture on
+18 September produced 29 seconds of clean audio on the same device.
+
+Consequences:
+
+- Duplex capture (CB-002) cannot be validated here. The header-only CAF files it produced are the
+  correct behavior for a call that carried no audio, not evidence about the capture path.
+- Phase 2, uplink injection, cannot be attempted on this device at all.
+- Everything that does not involve audio — call events, call control, the network protocol, the
+  Android client — remains fully testable, which is why those are being built first.
+
+Resolving it needs microsoldering repair or a second iPhone 7.
 
 ## Implications for the implementation
 

@@ -11,26 +11,26 @@
 
 Exit criterion met: call events and downlink audio work on the real device.
 
-## Phase 1 — Call control + duplex capture
+## Phase 1 — Call control + duplex capture: control half complete
 
-Priority: highest.
-
-1. Run `speaker` and `microphone` capture simultaneously during the same call.
-2. Verify the duration, channels and content of both files.
+1. [ ] Run `speaker` and `microphone` capture simultaneously during the same call.
+2. [ ] Verify the duration, channels and content of both files.
 3. Add a `call-control` tool to the open CLI project:
-   - [x] `status` prototype
-   - [x] `answer` prototype
-   - [x] `hangup` prototype
-   - `reject` later
-4. Test with `CTCopyCurrentCalls`, `CTCallGetStatus`, `CTCallAnswer` and `CTCallDisconnect`.
-5. Log answer and hang-up timings.
+   - [x] `status`
+   - [x] `answer`
+   - [x] `hangup`
+   - [ ] `reject`
+4. [x] Test with `CTCopyCurrentCalls`, `CTCallGetStatus`, `CTCallAnswer` and `CTCallDisconnect`.
+5. [x] Log answer and hang-up timings — 54 ms and 109 ms on the reference device.
 
-Success criterion: an incoming call can be answered and an active call hung up by a command issued
-over SSH, and both audio directions are captured into separate files.
+Call control is verified (CB-003). Duplex capture is blocked: the reference device's audio IC has
+failed, so no call on it carries audio in either direction. Items 1 and 2 stay open and move to
+whichever device replaces it.
 
 ## Phase 2 — Uplink injection gate
 
-Priority: critical.
+Priority: critical. **Blocked on hardware** — this phase cannot be attempted until there is a
+device with a working audio path.
 
 1. Generate a local test tone or pre-recorded PCM.
 2. Investigate feeding that audio into the telephony uplink path without playing it through the
@@ -46,13 +46,17 @@ notification, remote control and listen-only features remain feasible.
 
 ## Phase 3 — iPhone agent
 
-1. Merge `call-monitor` and the recording code into a single long-lived process.
-2. Implement the canonical call state machine.
-3. Add a local WebSocket server and a pairing key.
-4. Implement JSON events and command responses.
-5. Stream downlink PCM live.
+Now the active phase, and deliberately ordered so that everything not involving audio comes first:
+none of it depends on the failed audio hardware.
+
+1. [x] Define the control protocol — [PROTOCOL.md](PROTOCOL.md).
+2. Merge `call-monitor` and the control code into a single long-lived process.
+3. Implement the canonical call state machine, de-duplicated on `callId + state`.
+4. Add the NDJSON TCP listener, the pairing token and HMAC authentication.
+5. Implement events, commands and `requestId` idempotency.
 6. Produce a rootless Debian package and a LaunchDaemon.
 7. Add restart-after-crash and log rotation.
+8. Stream downlink PCM live — blocked on hardware, last.
 
 Success criterion: without opening any app UI, the service starts after a jailbreak and forwards an
 incoming call to the network client.

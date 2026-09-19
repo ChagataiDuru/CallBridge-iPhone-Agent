@@ -50,34 +50,15 @@ A Kotlin app on stock Android is proposed:
 
 ## Protocol
 
-A single authenticated WebSocket connection is enough for the first PoC. Control messages can be
-JSON and audio frames binary.
+Control runs over a single authenticated TCP connection carrying newline-delimited JSON. The full
+contract — message types, fields, error codes, pairing and idempotency — is
+[PROTOCOL.md](PROTOCOL.md); it is what both the agent and the Android client code against.
 
-Example event:
+WebSocket was the original plan and was dropped: the client is a native app, so the handshake,
+masking and frame layer would have to be hand-written on the iOS side for no benefit here. Audio
+does not share the control connection; it gets its own stream with length-prefixed binary frames.
 
-```json
-{
-  "type": "call.state",
-  "callId": "opaque-local-id",
-  "state": "ringing",
-  "direction": "incoming",
-  "address": "+90…",
-  "timestamp": "2026-09-18T00:53:14.556+03:00"
-}
-```
-
-Example command:
-
-```json
-{
-  "type": "call.command",
-  "callId": "opaque-local-id",
-  "command": "answer",
-  "requestId": "client-generated-id"
-}
-```
-
-Every command must be applied exactly once per `requestId` and must produce an explicit result
+Every command must be applied at most once per `requestId` and must produce an explicit result
 message.
 
 ## Audio transport plan

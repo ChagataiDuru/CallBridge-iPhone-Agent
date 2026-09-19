@@ -36,7 +36,16 @@ are under `evidence/sanitized/2026-09-18-incoming-call/`.
 
 ## CB-002 — Simultaneous speaker + microphone capture
 
-Status: **Next test**
+Date attempted: **19 September 2026**  
+Result: **Blocked — cannot be validated on this device**
+
+Both recorders started correctly and both produced header-only 4 KB CAF files, because the call
+carried no audio in either direction: the device's audio IC has failed (see
+[STATUS.md](STATUS.md#device-audio-fault--19-september-2026)). The run therefore says nothing about
+the capture path, and the test has to be repeated on a device with working audio before the
+microphone/uplink capability can be called verified.
+
+The procedure below is unchanged and still the one to run.
 
 ### Copying the helpers to the iPhone
 
@@ -85,7 +94,23 @@ injection.
 
 ## CB-003 — Programmatic answer/hang up
 
-Status: **CLI prototype ready; rootless build and device test pending**
+Date: **19 September 2026**  
+Result: **Pass**
+
+A full incoming call was answered and ended by command, without touching the screen:
+
+```json
+{"ok":true,"command":"answer","fromState":"ringing","toState":"active","observedStates":["ringing","active"],"elapsedMs":54,"stableForMs":1042}
+{"ok":true,"command":"hangup","fromState":"active","toState":"ended","observedStates":["active","ended"],"elapsedMs":109}
+```
+
+Both were confirmed by an independent `call-control status` run and by the `call-monitor` log.
+The no-call baseline behaved as specified: `status` returned `count: 0` with exit `0`, while
+`answer` and `hangup` returned `no_matching_call` with exit `3`.
+
+One earlier attempt returned `verification_timeout` with `observedState: ringing` while the event
+log showed the call had been answered and then ended 223 ms later. That was the stale-cache defect
+in the verification loop, since fixed; the caller hanging up at that moment explained the drop.
 
 Source: `cli/call-control.mm`
 
