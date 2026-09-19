@@ -8,6 +8,7 @@ INSTALL_TARGET_PROCESSES += audio-mixer
 INSTALL_TARGET_PROCESSES += call-recorder
 INSTALL_TARGET_PROCESSES += call-monitor
 INSTALL_TARGET_PROCESSES += call-control
+INSTALL_TARGET_PROCESSES += callbridge-agent
 
 INSTALL_TARGET_PROCESSES += dtmf-decoder
 
@@ -20,6 +21,7 @@ TOOL_NAME += audio-mixer
 TOOL_NAME += call-recorder
 TOOL_NAME += call-monitor
 TOOL_NAME += call-control
+TOOL_NAME += callbridge-agent
 
 TOOL_NAME += dtmf-decoder
 
@@ -76,6 +78,15 @@ call-control_CCFLAGS += -std=gnu++17
 call-control_CODESIGN_FLAGS += -Scli/call-control.plist
 call-control_FRAMEWORKS += Foundation CoreTelephony
 call-control_INSTALL_PATH += /usr/local/bin
+
+callbridge-agent_USE_MODULES := 0
+callbridge-agent_FILES += cli/callbridge-agent.mm
+callbridge-agent_CFLAGS += -fobjc-arc
+callbridge-agent_CFLAGS += -Iinclude
+callbridge-agent_CCFLAGS += -std=gnu++17
+callbridge-agent_CODESIGN_FLAGS += -Scli/callbridge-agent.plist
+callbridge-agent_FRAMEWORKS += Foundation CoreTelephony
+callbridge-agent_INSTALL_PATH += /usr/local/bin
 
 dtmf-decoder_USE_MODULES := 0
 dtmf-decoder_FILES += cli/dtmf-decoder.mm

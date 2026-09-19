@@ -51,6 +51,7 @@ All tools build into a single rootless `.deb` and install to `/var/jb/usr/local/
 
 | Tool | Purpose |
 |---|---|
+| `callbridge-agent` | Long-lived service: publishes call state and accepts commands over NDJSON |
 | `call-monitor` | Streams CoreTelephony and CallKit call events |
 | `call-control` | `status`, `answer`, `hangup` — emits a single JSON object |
 | `call-recorder` | Records the `speaker` (downlink) or `microphone` (uplink) channel to CAF |
@@ -98,6 +99,37 @@ scp packages/*.deb mobile@<iphone-ip>:/var/mobile/
 ssh mobile@<iphone-ip> 'sudo dpkg -i /var/mobile/<package>.deb'
 ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/call-control status'
 ```
+
+## Running the agent
+
+`callbridge-agent` runs in the foreground for now; persistence via a LaunchDaemon comes once it has
+been exercised by hand. It generates a pairing token on first start.
+
+```sh
+ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/callbridge-agent --print-token'
+ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/callbridge-agent'   # --port 8765 by default
+```
+
+To exercise it without the Android client, from the Mac:
+
+```sh
+python3 - <<'PY'
+import hashlib, hmac, json, socket
+HOST, PORT, TOKEN = "<iphone-ip>", 8765, "<token>"
+sock = socket.create_connection((HOST, PORT))
+lines = sock.makefile("rw", encoding="utf-8", newline="\n")
+hello = json.loads(lines.readline())
+print("hello", hello)
+proof = hmac.new(TOKEN.encode(), hello["nonce"].encode(), hashlib.sha256).hexdigest()
+lines.write(json.dumps({"type": "auth", "proof": proof, "clientName": "probe",
+                        "protocolVersion": 1}) + "\n")
+lines.flush()
+for line in lines:                      # auth.result, call.snapshot, then live events
+    print(line.strip())
+PY
+```
+
+The protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## On-device testing
 
