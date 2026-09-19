@@ -102,34 +102,52 @@ ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/call-control status'
 
 ## Running the agent
 
-`callbridge-agent` runs in the foreground for now; persistence via a LaunchDaemon comes once it has
-been exercised by hand. It generates a pairing token on first start.
+Installing the package loads `com.callbridge.agent` as a LaunchDaemon, so the agent starts at boot
+and is restarted if it exits. **It listens on port 8765 from the moment it is installed**; removing
+the package unloads it.
 
 ```sh
-ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/callbridge-agent --print-token'
-ssh mobile@<iphone-ip> 'sudo /var/jb/usr/local/bin/callbridge-agent'   # --port 8765 by default
+sudo /var/jb/usr/local/bin/callbridge-agent --print-token          # the pairing key
+sudo launchctl unload -w /var/jb/Library/LaunchDaemons/com.callbridge.agent.plist
+sudo launchctl load   -w /var/jb/Library/LaunchDaemons/com.callbridge.agent.plist
+tail -f /var/log/callbridge-agent.log
 ```
 
-To exercise it without the Android client, from the Mac:
+To run it by hand instead — useful while developing — unload the daemon first, then:
+
+```sh
+sudo /var/jb/usr/local/bin/callbridge-agent            # --port 8765 by default
+```
+
+The token is generated on first start and kept at `/var/jb/etc/callbridge/token`, mode `0600`.
+
+To exercise the agent without the Android client, from the Mac:
 
 ```sh
 python3 - <<'PY'
 import hashlib, hmac, json, socket
 HOST, PORT, TOKEN = "<iphone-ip>", 8765, "<token>"
-sock = socket.create_connection((HOST, PORT))
-lines = sock.makefile("rw", encoding="utf-8", newline="\n")
+lines = socket.create_connection((HOST, PORT)).makefile("rw", encoding="utf-8", newline="\n")
+
+def send(message):
+    lines.write(json.dumps(message) + "\n")
+    lines.flush()
+
 hello = json.loads(lines.readline())
-print("hello", hello)
-proof = hmac.new(TOKEN.encode(), hello["nonce"].encode(), hashlib.sha256).hexdigest()
-lines.write(json.dumps({"type": "auth", "proof": proof, "clientName": "probe",
-                        "protocolVersion": 1}) + "\n")
-lines.flush()
-for line in lines:                      # auth.result, call.snapshot, then live events
-    print(line.strip())
+print(hello)
+send({"type": "auth", "protocolVersion": 1, "clientName": "probe",
+      "proof": hmac.new(TOKEN.encode(), hello["nonce"].encode(), hashlib.sha256).hexdigest()})
+
+for line in lines:                       # auth.result, call.snapshot, then live events
+    message = json.loads(line)
+    print(message)
+    if message["type"] == "ping":        # answer it, or the agent drops the connection
+        send({"type": "pong"})
 PY
 ```
 
-The protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md).
+The agent pings every 15 seconds and closes a connection that has not answered two of them. The
+protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## On-device testing
 

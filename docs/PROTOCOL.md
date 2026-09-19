@@ -47,7 +47,7 @@ consecutive pings go unanswered.
 | Field | Type | Meaning |
 |---|---|---|
 | `type` | string | Message type. Always present. |
-| `timestamp` | string | ISO 8601 UTC with milliseconds, e.g. `2026-09-19T19:34:58.959Z`. Always present. |
+| `timestamp` | string | ISO 8601 UTC with milliseconds, e.g. `2026-09-19T19:34:58.959Z`. Always present on messages from the agent; optional on messages from the client, which the agent ignores. |
 | `requestId` | string | Client-generated id on commands, echoed on the matching result. |
 
 Timestamps are always UTC. The client converts to local time for display.

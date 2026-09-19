@@ -50,13 +50,17 @@ Now the active phase, and deliberately ordered so that everything not involving 
 none of it depends on the failed audio hardware.
 
 1. [x] Define the control protocol — [PROTOCOL.md](PROTOCOL.md).
-2. Merge `call-monitor` and the control code into a single long-lived process.
-3. Implement the canonical call state machine, de-duplicated on `callId + state`.
-4. Add the NDJSON TCP listener, the pairing token and HMAC authentication.
-5. Implement events, commands and `requestId` idempotency.
-6. Produce a rootless Debian package and a LaunchDaemon.
-7. Add restart-after-crash and log rotation.
+2. [x] Merge `call-monitor` and the control code into a single long-lived process.
+3. [x] Implement the canonical call state machine, de-duplicated on `callId + state`.
+4. [x] Add the NDJSON TCP listener, the pairing token and HMAC authentication.
+5. [x] Implement events, commands and `requestId` idempotency.
+6. [x] Produce a rootless Debian package and a LaunchDaemon.
+7. Add log rotation. Restart-after-crash is handled by the daemon's `KeepAlive`.
 8. Stream downlink PCM live — blocked on hardware, last.
+
+Verified on the device so far: the agent listens, a client pairs over HMAC and receives `hello`,
+`auth.result`, `call.snapshot` and the keepalive pings. Delivering a real `call.state` event and
+executing a command through the agent is still untested — it needs an incoming call.
 
 Success criterion: without opening any app UI, the service starts after a jailbreak and forwards an
 incoming call to the network client.

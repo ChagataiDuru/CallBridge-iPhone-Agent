@@ -608,6 +608,9 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
         return;
     }
 
+    /* Anything arriving proves the client is alive, not just a pong. */
+    connection.missedPings = 0;
+
     if ([type isEqualToString:@"auth"]) {
         [self handleAuth:message fromConnection:connection];
         return;
@@ -675,6 +678,8 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
 
     connection.authenticated = YES;
     connection.clientName = message[@"clientName"];
+    /* Start the ping clock now, so the first ping is one interval away rather than immediate. */
+    _lastPingAt = CFAbsoluteTimeGetCurrent();
     NSLog(@"callbridge-agent: client authenticated (%@)", connection.clientName ?: @"unnamed");
 
     [connection sendMessage:@{

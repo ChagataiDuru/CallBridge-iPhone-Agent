@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+PLIST=/var/jb/Library/LaunchDaemons/com.callbridge.agent.plist
+
+if [ -f "$PLIST" ]; then
+  launchctl unload -w "$PLIST" >/dev/null 2>&1 || true
+fi
+
+exit 0
