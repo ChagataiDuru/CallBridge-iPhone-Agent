@@ -1,12 +1,20 @@
 #import <Foundation/Foundation.h>
-#include <unistd.h>
 
 #import "CTCall.h"
+#import "CTTelephonyCenter.h"
 
 static const NSInteger kExitUsage = 2;
 static const NSInteger kExitNoMatchingCall = 3;
 static const NSInteger kExitVerificationTimeout = 4;
 static const NSInteger kExitAmbiguousCall = 5;
+static const NSInteger kExitCallEnded = 6;
+static const NSInteger kExitCallDropped = 7;
+
+/* How long an answered call must stay active before the answer counts as a success. */
+static const NSTimeInterval kAnswerStabilityInterval = 1.0;
+
+/* One run loop slice. Short enough to catch a call that ends a few hundred ms after answering. */
+static const NSTimeInterval kPollInterval = 0.05;
 
 static NSString *Timestamp(void) {
     static NSISO8601DateFormatter *formatter;
@@ -145,35 +153,126 @@ static BOOL FindCallState(NSString *callID, NSString **state) {
     return found;
 }
 
-static BOOL WaitForTransition(NSString *callID, NSString *command, NSInteger timeoutMs,
-                              NSString **finalState, NSInteger *elapsedMs) {
+/*
+ * CTCopyCurrentCalls answers from a client-side cache that is refreshed by CoreTelephony
+ * notifications. A one-shot process that never runs its run loop keeps reading the snapshot it
+ * took at startup, so the call list looks frozen for the whole verification window. The observer
+ * below is the same mechanism call-monitor uses, and it is what actually reports the transition.
+ */
+
+static NSString *gWatchedCallID = nil;
+static NSMutableArray<NSString *> *gObservedStates = nil;
+static NSString *gNotifiedState = nil;
+
+static void RecordObservedState(NSString *state) {
+    if (!state.length || [gObservedStates.lastObject isEqualToString:state])
+        return;
+    [gObservedStates addObject:state];
+}
+
+static void TelephonyEventCallback(CFNotificationCenterRef center, void *observer, CFStringRef name,
+                                   const void *object, CFDictionaryRef userInfo) {
+    (void)center;
+    (void)observer;
+
+    if (!object || !gWatchedCallID || !name)
+        return;
+    if (CFStringCompare(name, kCTCallStatusChangeNotification, 0) != kCFCompareEqualTo &&
+        CFStringCompare(name, kCTCallIdentificationChangeNotification, 0) != kCFCompareEqualTo)
+        return;
+
+    CTCallRef call = (CTCallRef)object;
+    if (![CopyCallID(call) isEqualToString:gWatchedCallID])
+        return;
+
+    NSNumber *status = [(__bridge NSDictionary *)userInfo objectForKey:@"kCTCallStatus"];
+    NSString *state =
+        StatusName(status ? (CTCallStatus)status.integerValue : CTCallGetStatus(call));
+    gNotifiedState = state;
+    RecordObservedState(state);
+}
+
+static void StartObserving(NSString *callID, NSString *initialState) {
+    gWatchedCallID = callID;
+    gObservedStates = [NSMutableArray array];
+    gNotifiedState = nil;
+    RecordObservedState(initialState);
+
+    CFNotificationCenterRef center = CTTelephonyCenterGetDefault();
+    CTTelephonyCenterAddObserver(center, NULL, TelephonyEventCallback,
+                                 kCTCallStatusChangeNotification, NULL,
+                                 CFNotificationSuspensionBehaviorDeliverImmediately);
+    CTTelephonyCenterAddObserver(center, NULL, TelephonyEventCallback,
+                                 kCTCallIdentificationChangeNotification, NULL,
+                                 CFNotificationSuspensionBehaviorDeliverImmediately);
+}
+
+static void StopObserving(void) {
+    CTTelephonyCenterRemoveEveryObserver(CTTelephonyCenterGetDefault(), NULL);
+    gWatchedCallID = nil;
+}
+
+static BOOL IsTerminalState(NSString *state) {
+    return [state isEqualToString:@"ended"] || [state isEqualToString:@"dropped"];
+}
+
+typedef NS_ENUM(NSInteger, TransitionOutcome) {
+    TransitionVerified = 0,
+    TransitionEndedEarly,
+    TransitionDroppedAfterAnswer,
+    TransitionTimedOut,
+};
+
+static TransitionOutcome WaitForTransition(NSString *callID, NSString *command, NSInteger timeoutMs,
+                                           NSString **finalState, NSInteger *elapsedMs,
+                                           NSInteger *activeForMs) {
     CFAbsoluteTime started = CFAbsoluteTimeGetCurrent();
+    CFAbsoluteTime answeredAt = 0;
+    BOOL answering = [command isEqualToString:@"answer"];
+
     while (true) {
-        NSString *state = nil;
-        BOOL found = FindCallState(callID, &state);
+        /* Run the run loop instead of sleeping, so CoreTelephony can deliver the notification
+           that carries the new call status. */
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, kPollInterval, false);
 
-        if ([command isEqualToString:@"answer"] && found && [state isEqualToString:@"active"]) {
-            *finalState = state;
-            break;
-        }
-        if ([command isEqualToString:@"hangup"] &&
-            (!found || [state isEqualToString:@"ended"] || [state isEqualToString:@"dropped"])) {
-            *finalState = found ? state : @"ended";
-            break;
+        NSString *polled = nil;
+        BOOL found = FindCallState(callID, &polled);
+
+        /* A notification, once received, is authoritative; the polled snapshot may be stale. */
+        NSString *state = gNotifiedState ?: polled;
+        BOOL gone = gNotifiedState ? IsTerminalState(gNotifiedState) : !found;
+
+        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        *finalState = state ?: @"not-found";
+
+        if (answering && [state isEqualToString:@"active"] && !gone) {
+            if (answeredAt == 0)
+                answeredAt = now;
+            /* Answering is only a success if the call then stays up: a call that is torn down
+               moments after being answered must not be reported as answered. */
+            if (now - answeredAt >= kAnswerStabilityInterval) {
+                *elapsedMs = (NSInteger)((answeredAt - started) * 1000.0);
+                *activeForMs = (NSInteger)((now - answeredAt) * 1000.0);
+                return TransitionVerified;
+            }
+        } else if (gone || IsTerminalState(state)) {
+            *finalState = IsTerminalState(state) ? state : @"ended";
+            *elapsedMs = (NSInteger)((now - started) * 1000.0);
+            if (!answering)
+                return TransitionVerified;
+            if (answeredAt > 0) {
+                *activeForMs = (NSInteger)((now - answeredAt) * 1000.0);
+                return TransitionDroppedAfterAnswer;
+            }
+            return TransitionEndedEarly;
         }
 
-        NSInteger currentElapsed =
-            (NSInteger)((CFAbsoluteTimeGetCurrent() - started) * 1000.0);
+        NSInteger currentElapsed = (NSInteger)((now - started) * 1000.0);
         if (currentElapsed >= timeoutMs) {
-            *finalState = found ? state : @"not-found";
             *elapsedMs = currentElapsed;
-            return NO;
+            return TransitionTimedOut;
         }
-        usleep(100 * 1000);
     }
-
-    *elapsedMs = (NSInteger)((CFAbsoluteTimeGetCurrent() - started) * 1000.0);
-    return YES;
 }
 
 static NSInteger ParseTimeout(NSArray<NSString *> *arguments, NSString **errorMessage) {
@@ -285,6 +384,10 @@ static int RunAction(NSString *command, NSInteger timeoutMs) {
     CTCallRef call = (CTCallRef)candidates.firstObject.pointerValue;
     NSString *callID = CopyCallID(call);
     NSString *initialState = StatusName(CTCallGetStatus(call));
+
+    /* Observe before acting: the transition can land within a few hundred milliseconds. */
+    StartObserving(callID, initialState);
+
     if ([command isEqualToString:@"answer"])
         CTCallAnswer(call);
     else
@@ -293,28 +396,55 @@ static int RunAction(NSString *command, NSInteger timeoutMs) {
 
     NSString *finalState = nil;
     NSInteger elapsedMs = 0;
-    BOOL verified = WaitForTransition(callID, command, timeoutMs, &finalState, &elapsedMs);
-    if (!verified) {
+    NSInteger activeForMs = 0;
+    TransitionOutcome outcome =
+        WaitForTransition(callID, command, timeoutMs, &finalState, &elapsedMs, &activeForMs);
+    NSArray<NSString *> *observedStates = [gObservedStates copy];
+    StopObserving();
+
+    NSMutableDictionary *details = [@{
+        @"callId" : callID,
+        @"fromState" : initialState,
+        @"observedState" : finalState ?: @"unknown",
+        @"observedStates" : observedStates ?: @[],
+        @"elapsedMs" : @(elapsedMs),
+    } mutableCopy];
+    if (activeForMs > 0)
+        details[@"activeForMs"] = @(activeForMs);
+
+    switch (outcome) {
+    case TransitionEndedEarly:
+        PrintJSON(ErrorJSON(command, @"call_ended",
+                            @"The call ended before the expected transition was observed", details));
+        return (int)kExitCallEnded;
+    case TransitionDroppedAfterAnswer:
+        PrintJSON(ErrorJSON(command, @"call_dropped_after_answer",
+                            @"The call was answered but was torn down before it stayed active",
+                            details));
+        return (int)kExitCallDropped;
+    case TransitionTimedOut:
         PrintJSON(ErrorJSON(command, @"verification_timeout",
                             @"The command was sent but the expected call transition was not observed",
-                            @{
-                                @"callId" : callID,
-                                @"fromState" : initialState,
-                                @"observedState" : finalState ?: @"unknown",
-                                @"elapsedMs" : @(elapsedMs),
-                            }));
+                            details));
         return (int)kExitVerificationTimeout;
+    case TransitionVerified:
+        break;
     }
 
-    PrintJSON(@{
+    NSMutableDictionary *result = [@{
         @"ok" : @YES,
         @"command" : command,
         @"callId" : callID,
         @"fromState" : initialState,
         @"toState" : finalState,
+        @"observedStates" : observedStates ?: @[],
         @"elapsedMs" : @(elapsedMs),
         @"timestamp" : Timestamp(),
-    });
+    } mutableCopy];
+    if (activeForMs > 0)
+        result[@"stableForMs"] = @(activeForMs);
+
+    PrintJSON(result);
     return 0;
 }
 

@@ -58,8 +58,15 @@ All tools build into a single rootless `.deb` and install to `/var/jb/usr/local/
 `status --include-address` to see them. `answer` and `hangup` act only when exactly one matching
 cellular call exists, and verify the observed state transition before reporting success.
 
+Verification registers a `CTTelephonyCenter` observer and runs the run loop, because
+`CTCopyCurrentCalls` otherwise keeps returning the snapshot the process took at startup. Every
+result carries `observedStates`, the ordered list of states seen while the command ran. `answer`
+additionally requires the call to stay active for one second before it reports success, so a call
+that is torn down right after being answered is reported as a failure rather than as an answer.
+
 Exit codes: `0` success, `2` usage error, `3` no matching call, `4` transition verification
-timeout, `5` ambiguous call selection.
+timeout, `5` ambiguous call selection, `6` the call ended before the expected transition,
+`7` the call was answered but dropped before it stayed active.
 
 ```sh
 call-control status

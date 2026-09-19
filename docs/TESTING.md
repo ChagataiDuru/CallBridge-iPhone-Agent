@@ -117,7 +117,13 @@ default output masks it.
 Acceptance criteria:
 
 - `call-control status` returns the current call and its state.
-- `call-control answer` answers the single ringing cellular call.
+- `call-control answer` answers the single ringing cellular call and the call stays up, so the
+  result is `ok: true` with `observedStates` of `["ringing", "active"]`.
 - `call-control hangup` ends the single active call.
 - With no call in progress the commands produce a safe, machine-readable error.
 - If more than one eligible call exists the command does not act and returns `ambiguous_call`.
+
+A result of `call_dropped_after_answer` means `CTCallAnswer` reached the modem but the call was
+torn down before it stayed active; record `observedStates` and `activeForMs` and compare them with
+the `call-monitor` log, because that is the signature of the call being answered outside
+`callservicesd` rather than of a command that failed to arrive.
