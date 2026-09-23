@@ -3,7 +3,7 @@
 //  CallBridge
 //
 //  Long-lived agent: observes cellular call state, publishes it to one authenticated local
-//  client as NDJSON, and executes answer/hangup commands. See docs/PROTOCOL.md.
+//  client as NDJSON, and executes answer/reject/hangup commands. See docs/PROTOCOL.md.
 //
 
 #import <Foundation/Foundation.h>
@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 static const int kProtocolVersion = 1;
-static NSString *const kAgentVersion = @"0.6";
+static NSString *const kAgentVersion = @"0.7";
 
 static const NSUInteger kMaxLineLength = 64 * 1024;
 static const NSTimeInterval kAuthTimeout = 5.0;
@@ -560,6 +560,7 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
         @"device" : [self deviceModel],
         @"nonce" : connection.nonce,
         @"authRequired" : @YES,
+        @"capabilities" : @[ @"reject" ],
         @"timestamp" : Timestamp(),
     }];
 
@@ -713,11 +714,11 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
                                                 details:nil]];
         return;
     }
-    if (![@[ @"answer", @"hangup" ] containsObject:command]) {
+    if (![@[ @"answer", @"reject", @"hangup" ] containsObject:command]) {
         [connection sendMessage:[self resultForRequest:requestID
                                                command:command
                                               errorCode:@"bad_request"
-                                                message:@"Supported commands are answer and hangup"
+                                                message:@"Supported commands are answer, reject and hangup"
                                                 details:nil]];
         return;
     }
@@ -751,8 +752,9 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
         timeoutSeconds = value / 1000.0;
     }
 
-    CTCallStatus required = [command isEqualToString:@"answer"] ? kCTCallStatusIncomingCall
-                                                                : kCTCallStatusAnswered;
+    BOOL needsRinging = [command isEqualToString:@"answer"] ||
+                        [command isEqualToString:@"reject"];
+    CTCallStatus required = needsRinging ? kCTCallStatusIncomingCall : kCTCallStatusAnswered;
     CFArrayRef calls = CTCopyCurrentCalls(kCFAllocatorDefault);
     NSMutableArray<NSValue *> *candidates = [NSMutableArray array];
     for (CFIndex i = 0; calls && i < CFArrayGetCount(calls); i++) {
@@ -773,7 +775,7 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
                     message:[self resultForRequest:requestID
                                            command:command
                                           errorCode:@"no_matching_call"
-                                            message:[command isEqualToString:@"answer"]
+                                            message:needsRinging
                                                         ? @"No ringing cellular call was found"
                                                         : @"No active cellular call was found"
                                             details:nil]];

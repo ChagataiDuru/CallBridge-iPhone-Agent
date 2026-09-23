@@ -32,7 +32,7 @@ client                                   agent
   |<------------ call.snapshot ------------|   calls in progress right now
   |                                        |
   |<------------ call.state ---------------|   events, pushed as they happen
-  |------------- call.command ------------>|   answer / hangup
+  |------------- call.command ------------>|   answer / reject / hangup
   |<------------ call.result --------------|   outcome of that requestId
   |                                        |
   |<------------ ping ---------------------|   every 15 s
@@ -85,11 +85,13 @@ Two things the agent normalizes, so that clients do not have to:
 Sent immediately on connect, before authentication.
 
 ```json
-{"type":"hello","protocolVersion":1,"agentVersion":"0.6","device":"iPhone9,3","nonce":"6f1c…","authRequired":true,"timestamp":"2026-09-19T19:34:41.204Z"}
+{"type":"hello","protocolVersion":1,"agentVersion":"0.7","device":"iPhone9,3","nonce":"6f1c…","authRequired":true,"capabilities":["reject"],"timestamp":"2026-09-19T19:34:41.204Z"}
 ```
 
 `nonce` is 32 random bytes, hex encoded, fresh for every connection. If `protocolVersion` is not
 one the client supports, the client closes the connection and tells the user to update.
+`capabilities` is optional. Clients should show a reject action only when it contains `reject`;
+older agents omit the field. Adding this capability does not change `protocolVersion` 1.
 
 ### `auth.result`
 
@@ -175,7 +177,7 @@ value from `hello` and `token` is the shared pairing key. The raw token is never
 
 | Field | Notes |
 |---|---|
-| `command` | `answer` or `hangup`. `reject` is reserved for v1.1. |
+| `command` | `answer`, `reject` or `hangup`. `reject` requires a ringing cellular call; `hangup` requires an active cellular call. |
 | `callId` | Optional. When omitted the agent acts on the single eligible call, and fails with `ambiguous_call` if there is more than one. Clients should always send it. |
 | `timeoutMs` | Optional, 100–30000, default 5000. How long the agent waits for the transition. |
 | `requestId` | Required. See *Idempotency*. |
@@ -196,6 +198,9 @@ hanging up a call the user has just re-answered, is the kind of mistake the user
 
 Clients must generate a fresh `requestId` (a UUID) for every genuinely new command and reuse the
 same one when retrying.
+
+`reject` uses the same idempotency and `call.result` rules as the other commands. On success its
+`fromState` is `ringing` and `toState` is `ended` or `dropped`.
 
 ## Error codes
 
