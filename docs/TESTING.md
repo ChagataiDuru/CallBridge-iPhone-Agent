@@ -242,3 +242,55 @@ Two details that shape the design:
   per direction rather than assume one format for both.
 - Both taps record continuously from start to stop, not only while a call is up. The agent must
   gate streaming on call state, or it will publish audio when there is no call.
+
+## CB-006 — Uplink injection
+
+Status: **Tool built, device test pending**
+
+The question the whole product turns on: can generated PCM be placed on the cellular uplink, so the
+far end hears it, without it being played through a speaker for the microphone to pick up?
+
+### Why this is worth attempting
+
+Static review of the installed TrollRecorder app shows it ships an uplink playback feature —
+`PlayUplinkAudioIntent`, `StopUplinkPlaybackIntent`, `PreparedUplinkAudioFile`,
+`requestMuteExistingUplinks` / `requestUnmuteExistingUplinks`, and `setUplinkMuted:` alongside
+`playBackgroundAudioWithContentsOfFile:rate:volume:repeat:`. Injection on iOS is therefore not a
+question of whether it is possible at all, only of which path reaches it. The shape suggested by
+those names is: mute the real microphone uplink, then play a file into it.
+
+### The approach under test
+
+`call-recorder` attaches an `ATAudioTap` to an **input** `AudioQueue` with
+`kAudioQueueProperty_TapOutputBypass` and reads the telephony stream. `uplink-player` does the
+symmetric thing: it attaches the same kind of tap, built for the microphone PID (`-3`), to an
+**output** queue and writes a 1 kHz tone into it.
+
+`AudioQueueSetProperty(TapOutputBypass)` on an output queue is the decisive call. The tool logs its
+status explicitly, because a refusal there rules the approach out immediately, with no call needed.
+
+### Procedure
+
+This device cannot carry audio on an incoming call, so use an outgoing one, which works over a
+Bluetooth headset.
+
+1. Control run, no call: `uplink-player --no-tap --seconds 5`. The tone should be audible on the
+   phone. This proves the tool and the audio route before anything subtle is tested.
+2. Control run with the tap, no call: `uplink-player --seconds 5`. Record what
+   `AudioQueueSetProperty` returns.
+3. Dial out to a helper over Bluetooth and, once talking, run
+   `uplink-player --channel microphone --seconds 20`.
+4. Ask the helper what they hear, and keep the headset away from the phone's microphone so that an
+   acoustic path cannot be mistaken for injection.
+
+### How to read the result
+
+| Observation | Meaning |
+|---|---|
+| `AudioQueueSetProperty` refuses | An output queue cannot carry a tap; this path is dead, try the mute-and-play shape instead |
+| It is accepted and the far end hears the tone | Injection works — the central risk of the project is gone |
+| Accepted, far end hears nothing, tone audible locally | The tap attached but the audio still went to the speaker |
+| Accepted, far end hears nothing, nothing audible locally | The audio went somewhere, just not the uplink — worth tapping `speaker` while playing to see where |
+
+Step 4 matters more than it looks: with a headset connected the phone's own microphone is still
+live, so a tone played out loud could reach the far end acoustically and look like success.

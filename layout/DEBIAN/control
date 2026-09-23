@@ -1,6 +1,6 @@
 Package: com.callbridge.cli
 Name: CallBridge CLI
-Version: 0.6
+Version: 0.7
 Section: Utilities
 Depends: firmware (>= 13.0)
 Architecture: iphoneos-arm

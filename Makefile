@@ -9,6 +9,7 @@ INSTALL_TARGET_PROCESSES += call-recorder
 INSTALL_TARGET_PROCESSES += call-monitor
 INSTALL_TARGET_PROCESSES += call-control
 INSTALL_TARGET_PROCESSES += callbridge-agent
+INSTALL_TARGET_PROCESSES += uplink-player
 
 INSTALL_TARGET_PROCESSES += dtmf-decoder
 
@@ -22,6 +23,7 @@ TOOL_NAME += call-recorder
 TOOL_NAME += call-monitor
 TOOL_NAME += call-control
 TOOL_NAME += callbridge-agent
+TOOL_NAME += uplink-player
 
 TOOL_NAME += dtmf-decoder
 
@@ -87,6 +89,15 @@ callbridge-agent_CCFLAGS += -std=gnu++17
 callbridge-agent_CODESIGN_FLAGS += -Scli/callbridge-agent.plist
 callbridge-agent_FRAMEWORKS += Foundation CoreTelephony
 callbridge-agent_INSTALL_PATH += /usr/local/bin
+
+uplink-player_USE_MODULES := 0
+uplink-player_FILES += cli/uplink-player.mm
+uplink-player_CFLAGS += -fobjc-arc
+uplink-player_CFLAGS += -Iinclude
+uplink-player_CCFLAGS += -std=gnu++17
+uplink-player_CODESIGN_FLAGS += -Scli/uplink-player.plist
+uplink-player_FRAMEWORKS += AudioToolbox AVFAudio
+uplink-player_INSTALL_PATH += /usr/local/bin
 
 dtmf-decoder_USE_MODULES := 0
 dtmf-decoder_FILES += cli/dtmf-decoder.mm
