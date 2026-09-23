@@ -11,12 +11,12 @@ Last updated: **23 September 2026**
 | Call state transitions | Verified | `Incoming → Answered → Incoming Ended` | Reduce to a single state machine |
 | Receive CallKit events | Verified | CallKit notifications for the same call | Correlate with CoreTelephony |
 | Capture downlink/far-end audio | Verified | 29.234 s CAF; confirmed by listening | Try live framing |
-| Capture microphone/uplink audio | Unresolved | Both CB-002 attempts ran on calls that carried no audio, so neither tested the tap | Capture during a manually answered Bluetooth call |
-| Answer a call programmatically | Verified, without audio routing | CB-003: `ringing → active` in 54 ms; CB-004 showed the audio route does not follow | Drive route selection explicitly |
+| Capture microphone/uplink audio | Verified | CB-005: 96.7 s mono uplink alongside the stereo downlink, both audibly correct | Gate on call state and stream it |
+| Answer a call programmatically | Verified | CB-003: `ringing → active` in 54 ms, stable | Check the audio route on healthy hardware |
 | Hang up a call programmatically | Verified | CB-003: `active → ended` in 109 ms | Expose as an agent command |
-| Inject Android audio into the uplink | Critical research, blocked by hardware | The current CLI only captures | Validate an audio tap/output path once audio works |
+| Inject Android audio into the uplink | Critical research | The current CLI only captures; outgoing calls on this device have a working audio path to test against | Validate an audio tap/output path experimentally |
 | Local network control channel | Verified | CB-004: paired client received live events and drove two calls | Harden: TLS, reconnection |
-| Live downlink streaming | Design | Capture-to-file is proven | Publish PCM frames to a socket |
+| Live downlink streaming | Design | Capture-to-file is proven in both directions | Publish PCM frames to a socket |
 | Persistence across reboots | Implemented | `com.callbridge.agent` LaunchDaemon, `RunAtLoad` + `KeepAlive` | Confirm across a reboot; add log rotation |
 | Stock Android client | Design | Not implemented yet | Kotlin foreground service + Compose screen |
 | Reachability over the iPhone hotspot | Pending | Local Wi-Fi/SSH works | Hotspot routing test matrix |
@@ -101,6 +101,31 @@ picks the route has to be driven explicitly.
 It also means the capture question is still open rather than settled. The `call-recorder speaker`
 run on 23 September happened during that silent, programmatically answered call, so it says nothing
 about whether the tap can see Bluetooth audio.
+
+## Duplex capture — 23 September 2026
+
+Test CB-005 captured both directions of a live call into separate files, each 96.700680 seconds and
+audibly correct: a stereo downlink carrying the far end, and a mono uplink carrying the near end.
+
+It had to be done on an **outgoing** call. Incoming calls on this device produce no audio at all —
+the speaker button is greyed out and no route can be selected, whether the call is answered by hand
+or through the agent — while outgoing calls route to a Bluetooth headset and work normally. The
+likely reason is that an outgoing call inherits the already-active route while an incoming call has
+to build one, which is what the failed audio IC prevents. The tap does not care how the call was
+set up, so testing the capability this way is sound.
+
+Three results worth carrying forward:
+
+- Both directions can be captured, which was never proven before. CB-001 only established the
+  downlink.
+- Two taps run at once without interfering. The empty files in September were a silent call, not a
+  conflict between recorders.
+- The streams are frame-locked: both files hold exactly 4,264,500 frames. The channels are
+  sample-aligned, so live streaming will not have to correct drift between them.
+
+Two constraints for the agent: the downlink is stereo while the uplink is mono, so audio format
+negotiation is per direction; and both taps run continuously rather than only during a call, so
+streaming has to be gated on call state.
 
 ## Implications for the implementation
 

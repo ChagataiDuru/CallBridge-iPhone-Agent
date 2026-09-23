@@ -202,3 +202,43 @@ agent resolves a command when the CoreTelephony notification arrives or on its 1
 whichever comes first, so the figure includes notification delivery and tick granularity. It is
 comfortably below anything a user would notice, but it is not the same measurement as CB-003 and
 should not be compared with it directly.
+
+## CB-005 — Duplex capture on an outgoing call
+
+Date: **23 September 2026**  
+Result: **Pass**
+
+CB-002 could not be run on this device because incoming calls carry no audio (see
+[STATUS.md](STATUS.md#device-audio-fault--19-september-2026)). Outgoing calls do, over a Bluetooth
+headset, and the tap does not care which direction the call was set up in — so the capability was
+tested that way instead.
+
+### Procedure
+
+1. Bluetooth headset connected.
+2. `start-duplex-capture.sh` started `call-monitor` plus both recorders.
+3. An outgoing call was dialled from the phone; both parties spoke in turn for about a minute.
+4. `stop-capture.sh` ended the run.
+
+### Results
+
+| File | Format | Duration | Audio |
+|---|---|---|---|
+| `downlink-speaker.caf` | 2 ch, 44,100 Hz, Float32 interleaved | 96.700680 s | Far end, clear |
+| `uplink-microphone.caf` | 1 ch, 44,100 Hz, Float32 | 96.700680 s | Near end, clear |
+
+Both were confirmed by listening. Three things this settles:
+
+- **`ATAudioTap` captures both directions.** Only the downlink had ever been proven, in CB-001.
+- **Two taps run simultaneously without conflict.** The September hypothesis, that the empty CAF
+  files came from two recorders fighting over one tap, is wrong — that run was simply silent.
+- **The two streams are frame-locked.** Both files hold exactly 4,264,500 frames for the same
+  duration, so the channels are sample-aligned with no drift between them. Live streaming will not
+  need to resynchronize them, and echo cancellation later has a sound basis.
+
+Two details that shape the design:
+
+- The downlink is stereo and the uplink is mono. Format negotiation has to carry the channel count
+  per direction rather than assume one format for both.
+- Both taps record continuously from start to stop, not only while a call is up. The agent must
+  gate streaming on call state, or it will publish audio when there is no call.

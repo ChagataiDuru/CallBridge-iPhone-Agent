@@ -13,8 +13,8 @@ Exit criterion met: call events and downlink audio work on the real device.
 
 ## Phase 1 — Call control + duplex capture: control half complete
 
-1. [ ] Run `speaker` and `microphone` capture simultaneously during the same call.
-2. [ ] Verify the duration, channels and content of both files.
+1. [x] Run `speaker` and `microphone` capture simultaneously during the same call.
+2. [x] Verify the duration, channels and content of both files.
 3. Add a `call-control` tool to the open CLI project:
    - [x] `status`
    - [x] `answer`
@@ -23,30 +23,25 @@ Exit criterion met: call events and downlink audio work on the real device.
 4. [x] Test with `CTCopyCurrentCalls`, `CTCallGetStatus`, `CTCallAnswer` and `CTCallDisconnect`.
 5. [x] Log answer and hang-up timings — 54 ms and 109 ms on the reference device.
 
-Call control is verified (CB-003). Duplex capture is blocked: the reference device's audio IC has
-failed, so no call on it carries audio in either direction. Items 1 and 2 stay open and move to
-whichever device replaces it.
+Call control is verified (CB-003) and duplex capture is verified (CB-005), the latter on an outgoing
+call because incoming calls on this device carry no audio.
 
-## Phase 1b — Audio routing on a programmatic answer
+## Phase 1b — Audio on incoming calls
 
-Priority: high, and newly discovered. A call answered with `CTCallAnswer` does not acquire the
-audio route that the phone's own answer path gives it: with a Bluetooth headset connected, an
-outgoing call routed to the headset while an agent-answered incoming call stayed silent.
+Not an engineering task on this device: incoming calls produce no audio and offer no route
+selection, by hand or through the agent, while outgoing calls work over Bluetooth. That is the
+failed audio IC, not the answer path — answering by hand fails identically.
 
-In the finished product every call is answered remotely, so this is not a test artifact — it is a
-capability the agent needs.
-
-1. Confirm the asymmetry: answer by hand with the headset connected and check that audio reaches it.
-2. Try answering through `TUCallCenter` (TelephonyUtilities) instead of `CTCallAnswer`, so
-   `callservicesd` performs its normal answer, including route selection.
-3. If that is not enough, set the route explicitly after answering.
-4. Re-run CB-002 during a call that is audible at the time of recording, which is the first test
-   that will actually exercise the tap.
+One question stays open for healthy hardware: whether a call answered with `CTCallAnswer` acquires
+the audio route that the phone's own answer path gives it. It could not be tested here. If it turns
+out not to, answering through `TUCallCenter` so `callservicesd` performs its normal answer is the
+first thing to try.
 
 ## Phase 2 — Uplink injection gate
 
-Priority: critical. Blocked until phase 1b produces a call with working audio on this device, or
-until a device with a healthy audio IC is available.
+Priority: critical, and **no longer blocked**. Outgoing calls on this device have a working audio
+path, and the injection question — can generated PCM reach the telephony uplink — does not depend
+on the call's direction.
 
 1. Generate a local test tone or pre-recorded PCM.
 2. Investigate feeding that audio into the telephony uplink path without playing it through the

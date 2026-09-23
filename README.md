@@ -22,7 +22,7 @@ was added, and licensing.
 
 ## Status — 19 September 2026
 
-Three of the early technical risks are settled on real hardware:
+Four of the early technical risks are settled on real hardware:
 
 1. **Call events.** Incoming calls, the caller's number, and the `Incoming → Answered → Ended`
    transitions are captured through CoreTelephony.
@@ -35,13 +35,16 @@ Three of the early technical risks are settled on real hardware:
 Current work is the `callbridge-agent` service and its control protocol, defined in
 [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
-Two things are **blocked on hardware**. The reference iPhone 7's audio IC has failed — calls
-connect and the state machine works, but no audio passes in either direction. That makes duplex
-capture impossible to validate on this device, and it puts the project's biggest open risk,
-**uplink injection**, out of reach until the device is repaired or replaced. Capturing the
-microphone channel was never proven; injecting into it is a separate question again, and nothing
-in this repo should assume either works. Call notification and remote control remain fully
-viable regardless.
+4. **Duplex capture.** Both directions of a live call recorded into separate, frame-locked files —
+   a stereo downlink and a mono uplink, 96.7 seconds each, audibly correct.
+
+The reference iPhone 7's audio IC has failed, which shapes what can be tested here: **incoming**
+calls carry no audio and offer no route selection, while outgoing calls work normally over a
+Bluetooth headset. Capture was therefore verified on an outgoing call, which exercises the same tap.
+
+The project's biggest open risk remains **uplink injection** — whether audio from Android can be
+pushed into the cellular uplink. Nothing in this repo should assume it works. It has not been
+attempted yet, but it is testable on this device, because outgoing calls have a working audio path.
 
 Full verification matrix: [docs/STATUS.md](docs/STATUS.md).
 
