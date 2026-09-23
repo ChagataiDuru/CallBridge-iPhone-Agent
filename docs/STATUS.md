@@ -11,8 +11,8 @@ Last updated: **23 September 2026**
 | Call state transitions | Verified | `Incoming → Answered → Incoming Ended` | Reduce to a single state machine |
 | Receive CallKit events | Verified | CallKit notifications for the same call | Correlate with CoreTelephony |
 | Capture downlink/far-end audio | Verified | 29.234 s CAF; confirmed by listening | Try live framing |
-| Capture microphone/uplink audio | Blocked by hardware | CB-002, twice: header-only CAF files, and a Bluetooth route does not feed the tap either | Repeat on a device with a working audio path |
-| Answer a call programmatically | Verified | CB-003: `ringing → active` in 54 ms, stable | Expose as an agent command |
+| Capture microphone/uplink audio | Unresolved | Both CB-002 attempts ran on calls that carried no audio, so neither tested the tap | Capture during a manually answered Bluetooth call |
+| Answer a call programmatically | Verified, without audio routing | CB-003: `ringing → active` in 54 ms; CB-004 showed the audio route does not follow | Drive route selection explicitly |
 | Hang up a call programmatically | Verified | CB-003: `active → ended` in 109 ms | Expose as an agent command |
 | Inject Android audio into the uplink | Critical research, blocked by hardware | The current CLI only captures | Validate an audio tap/output path once audio works |
 | Local network control channel | Verified | CB-004: paired client received live events and drove two calls | Harden: TLS, reconnection |
@@ -88,10 +88,19 @@ against CoreTelephony's repeated identification notifications.
 That closes the part of phase 3 that does not involve audio. What remains before the Android client
 is hardening rather than capability: TLS, reconnection behavior, and log rotation.
 
-A Bluetooth headset was used, which also settled the capture question: it restores call audio by
-routing around the failed audio IC, and a single-channel `call-recorder speaker` run during an
-audible call still produced nothing. The `ATAudioTap` path follows the internal audio route, so no
-accessory works around the fault. Audio capture needs different hardware, full stop.
+A Bluetooth headset was connected throughout, and it exposed a new problem. An outgoing call the
+user dialled themselves routed to the headset and was fully audible in both directions, so the
+headset does restore a working audio path around the failed audio IC. But an incoming call answered
+through the agent did **not** move to the headset, and carried no audio at all.
+
+So `CTCallAnswer` answers the call at the telephony layer without the audio-route selection that
+happens when the call is answered through the phone's own UI. This matters for the product, not
+just for testing: in the finished system every call is answered remotely, so whatever normally
+picks the route has to be driven explicitly.
+
+It also means the capture question is still open rather than settled. The `call-recorder speaker`
+run on 23 September happened during that silent, programmatically answered call, so it says nothing
+about whether the tap can see Bluetooth audio.
 
 ## Implications for the implementation
 

@@ -27,10 +27,26 @@ Call control is verified (CB-003). Duplex capture is blocked: the reference devi
 failed, so no call on it carries audio in either direction. Items 1 and 2 stay open and move to
 whichever device replaces it.
 
+## Phase 1b — Audio routing on a programmatic answer
+
+Priority: high, and newly discovered. A call answered with `CTCallAnswer` does not acquire the
+audio route that the phone's own answer path gives it: with a Bluetooth headset connected, an
+outgoing call routed to the headset while an agent-answered incoming call stayed silent.
+
+In the finished product every call is answered remotely, so this is not a test artifact — it is a
+capability the agent needs.
+
+1. Confirm the asymmetry: answer by hand with the headset connected and check that audio reaches it.
+2. Try answering through `TUCallCenter` (TelephonyUtilities) instead of `CTCallAnswer`, so
+   `callservicesd` performs its normal answer, including route selection.
+3. If that is not enough, set the route explicitly after answering.
+4. Re-run CB-002 during a call that is audible at the time of recording, which is the first test
+   that will actually exercise the tap.
+
 ## Phase 2 — Uplink injection gate
 
-Priority: critical. **Blocked on hardware** — this phase cannot be attempted until there is a
-device with a working audio path.
+Priority: critical. Blocked until phase 1b produces a call with working audio on this device, or
+until a device with a healthy audio IC is available.
 
 1. Generate a local test tone or pre-recorded PCM.
 2. Investigate feeding that audio into the telephony uplink path without playing it through the

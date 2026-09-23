@@ -43,12 +43,15 @@ On 19 September both recorders started correctly and both produced header-only 4
 because the call carried no audio in either direction: the device's audio IC has failed (see
 [STATUS.md](STATUS.md#device-audio-fault--19-september-2026)).
 
-On 23 September the test was retried with a Bluetooth headset, which restores usable call audio by
-routing around the failed audio IC. A single-channel control run — `call-recorder speaker` alone,
-during a call that both parties could hear — still produced a 4 KB header and no audio data. So the
-`ATAudioTap` capture path follows the device's internal audio route and a Bluetooth bypass does not
-feed it. Capture cannot be validated on this device by any route available to us, and the
-simultaneous dual-tap question stays open because there is no point testing it here.
+On 23 September the test was retried with a Bluetooth headset. The headset does restore a working
+audio path: an outgoing call dialled on the phone routed to it and was audible both ways. The
+capture run, however, was made during an incoming call answered through the agent, and that call
+never moved to the headset and carried no audio. The resulting 4 KB header therefore says nothing
+about the tap — it is the same silent-call result as 19 September, for a different reason.
+
+Both attempts so far have measured a silent call rather than the capture path. The next attempt
+must record during a call that is **audible at the time of recording**, which on this device means
+answering it by hand so the route reaches the headset.
 
 The procedure below is unchanged and is the one to run on a device with working audio.
 
@@ -188,6 +191,11 @@ received live call events, and answered and ended two calls without the phone be
 Two defects showed up in the output and were fixed afterwards: an `unknown` state was published
 ahead of the real one for outgoing calls, and the address changed from local format to E.164
 mid-call.
+
+A third finding is not a defect in the agent but a gap in the approach: with a Bluetooth headset
+connected, a call answered through the agent did not move its audio to the headset, while an
+outgoing call dialled on the phone did. `CTCallAnswer` answers without the route selection that
+the phone's own answer path performs.
 
 Command latency through the agent is several times the ~54 ms measured for the CLI in CB-003. The
 agent resolves a command when the CoreTelephony notification arrives or on its 100 ms tick,
