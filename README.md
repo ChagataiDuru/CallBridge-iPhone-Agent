@@ -20,23 +20,22 @@ was added, and licensing.
 | **Link** | Same Wi-Fi or the phone's hotspot; no cloud dependency |
 | **Function** | Show the incoming call and caller on Android, answer/reject/hang up, talk both ways |
 
-## Status — 19 September 2026
+## Status — 23 September 2026
 
 Four of the early technical risks are settled on real hardware:
 
 1. **Call events.** Incoming calls, the caller's number, and the `Incoming → Answered → Ended`
    transitions are captured through CoreTelephony.
-2. **Downlink audio.** The far end of a live cellular call is recorded cleanly from the
-   speaker/downlink channel via `ATAudioTap` — a 29.234 s, 44.1 kHz, stereo Float32 PCM CAF file,
-   audibly correct.
+2. **Audio capture, both directions.** A live call recorded into separate, frame-locked files: a
+   stereo downlink carrying the far end and a mono uplink carrying the near end, 96.7 seconds each
+   and audibly correct. Two taps run at once without interfering.
 3. **Call control.** A full incoming call was answered and ended by command without touching the
    screen: `ringing → active` in **54 ms**, `active → ended` in **109 ms**.
+4. **Remote control over the network.** `callbridge-agent` drove two real calls for a paired client
+   on another machine, publishing every state change exactly once.
 
-Current work is the `callbridge-agent` service and its control protocol, defined in
-[docs/PROTOCOL.md](docs/PROTOCOL.md).
-
-4. **Duplex capture.** Both directions of a live call recorded into separate, frame-locked files —
-   a stereo downlink and a mono uplink, 96.7 seconds each, audibly correct.
+Current work is hardening that agent — TLS, reconnection, log rotation — and then the Android
+client. The control protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 The reference iPhone 7's audio IC has failed, which shapes what can be tested here: **incoming**
 calls carry no audio and offer no route selection, while outgoing calls work normally over a
