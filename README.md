@@ -56,7 +56,7 @@ All tools build into a single rootless `.deb` and install to `/var/jb/usr/local/
 
 | Tool | Purpose |
 |---|---|
-| `callbridge-agent` | Long-lived service: publishes call state and accepts commands over NDJSON |
+| `callbridge-agent` | Long-lived service: publishes call state and accepts answer, reject and hangup over NDJSON |
 | `call-monitor` | Streams CoreTelephony and CallKit call events |
 | `call-control` | `status`, `answer`, `hangup` — emits a single JSON object |
 | `call-recorder` | Records the `speaker` (downlink) or `microphone` (uplink) channel to CAF |
