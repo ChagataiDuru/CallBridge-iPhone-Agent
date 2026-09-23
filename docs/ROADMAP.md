@@ -37,11 +37,18 @@ the audio route that the phone's own answer path gives it. It could not be teste
 out not to, answering through `TUCallCenter` so `callservicesd` performs its normal answer is the
 first thing to try.
 
-## Phase 2 — Uplink injection gate
+## Phase 2 — Uplink injection gate: passed
 
-Priority: critical, and **no longer blocked**. Outgoing calls on this device have a working audio
-path, and the injection question — can generated PCM reach the telephony uplink — does not depend
-on the call's direction.
+1. [x] Generate a local test tone.
+2. [x] Feed it into the telephony uplink without playing it through the system speaker.
+3. [x] Confirm the far end hears it — CB-006.
+4. [ ] Measure latency end to end.
+5. [ ] Test echo, gain and audio route changes.
+6. [ ] Mute the device's own microphone during injection, so it does not mix in.
+
+The gate is passed: a tone written by software was heard by the far end with no acoustic path
+available. Real two-way conversation over the network is therefore achievable, and the remaining
+items are engineering rather than research.
 
 1. Generate a local test tone or pre-recorded PCM.
 2. Investigate feeding that audio into the telephony uplink path without playing it through the
@@ -67,7 +74,7 @@ none of it depends on the failed audio hardware.
 5. [x] Implement events, commands and `requestId` idempotency.
 6. [x] Produce a rootless Debian package and a LaunchDaemon.
 7. Add log rotation. Restart-after-crash is handled by the daemon's `KeepAlive`.
-8. Stream downlink PCM live — blocked on hardware, last.
+8. Stream downlink PCM live, and accept uplink frames from the client.
 
 Verified on the device (CB-004): a paired client receives live `call.state` events and answers and
 ends real calls through the agent. What is left in this phase is hardening — TLS, reconnection and

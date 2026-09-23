@@ -14,7 +14,7 @@ Last updated: **23 September 2026**
 | Capture microphone/uplink audio | Verified | CB-005: 96.7 s mono uplink alongside the stereo downlink, both audibly correct | Gate on call state and stream it |
 | Answer a call programmatically | Verified | CB-003: `ringing → active` in 54 ms, stable | Check the audio route on healthy hardware |
 | Hang up a call programmatically | Verified | CB-003: `active → ended` in 109 ms | Expose as an agent command |
-| Inject Android audio into the uplink | Critical research | The current CLI only captures; outgoing calls on this device have a working audio path to test against | Validate an audio tap/output path experimentally |
+| Inject audio into the uplink | Verified | CB-006: a tone written by software was heard by the far end with no acoustic path available | Stream live audio instead of a tone |
 | Local network control channel | Verified | CB-004: paired client received live events and drove two calls | Harden: TLS, reconnection |
 | Live downlink streaming | Design | Capture-to-file is proven in both directions | Publish PCM frames to a socket |
 | Persistence across reboots | Implemented | `com.callbridge.agent` LaunchDaemon, `RunAtLoad` + `KeepAlive` | Confirm across a reboot; add log rotation |
@@ -126,6 +126,27 @@ Three results worth carrying forward:
 Two constraints for the agent: the downlink is stereo while the uplink is mono, so audio format
 negotiation is per direction; and both taps run continuously rather than only during a call, so
 streaming has to be gated on call state.
+
+## Uplink injection works — 23 September 2026
+
+The central technical risk of the project is resolved. Software-generated PCM, written to an output
+`AudioQueue` carrying an `ATAudioTap` built for the microphone PID, reaches the cellular uplink: the
+person on the other end of a live call heard a 1 kHz tone that was never played through a speaker.
+
+The mechanism is the mirror image of capture. `call-recorder` attaches a tap to an **input** queue
+and reads the telephony stream; `uplink-player` attaches the same kind of tap to an **output** queue
+and writes to it. `AudioQueueSetProperty(kAudioQueueProperty_TapOutputBypass)` accepts the tap on an
+output queue, which is the whole trick.
+
+The result is trustworthy because of the broken hardware rather than in spite of it. The decisive
+run had the Bluetooth headset disconnected, and on this device that leaves no acoustic path at all —
+the internal speaker and microphone are both dead. Nothing was audible locally and the far end still
+heard the tone.
+
+What follows from this: two-way audio over the network is achievable, not hypothetical. The Android
+client can be planned around real conversation rather than a workaround. What remains is engineering
+— streaming live frames instead of a generated tone, a jitter buffer, muting the device's own
+microphone so it does not mix in, and measuring latency end to end.
 
 ## Implications for the implementation
 

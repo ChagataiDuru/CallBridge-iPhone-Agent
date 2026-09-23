@@ -245,10 +245,54 @@ Two details that shape the design:
 
 ## CB-006 — Uplink injection
 
-Status: **Tool built, device test pending**
+Date: **23 September 2026**  
+Result: **Pass — the far end hears audio written by software**
 
-The question the whole product turns on: can generated PCM be placed on the cellular uplink, so the
+The question the whole product turned on: can generated PCM be placed on the cellular uplink, so the
 far end hears it, without it being played through a speaker for the microphone to pick up?
+
+It can.
+
+### Results
+
+1. Control run with no call, `--no-tap`: the tool plays normally.
+2. Control run with the tap attached to the output queue:
+   `AudioQueueSetProperty(TapOutputBypass) -> 0 (accepted)`. An output `AudioQueue` accepts an
+   `ATAudioTap`, which is what made the rest worth trying.
+3. During an outgoing call, `uplink-player --channel microphone`: the person on the other end heard
+   the 1 kHz tone.
+
+### Why the result is trustworthy
+
+A tone played out loud could be picked up by the phone's own microphone and reach the far end
+acoustically, which would look identical from the outside. With a Bluetooth headset that risk is
+acute, because the headset's microphone sits centimetres from its speaker.
+
+So the decisive run was made with **the headset disconnected entirely**. On this device that leaves
+no acoustic path at all: the failed audio IC means the internal speaker and the internal microphone
+are both dead, which is why incoming calls carry no audio here. Nothing was audible locally, the
+microphone could not have picked anything up, and the far end still heard the tone. The only route
+left is the one the tool wrote to.
+
+The hardware fault that has blocked this project for days is what made this particular test
+rigorous.
+
+### What this establishes, and what it does not
+
+Established: software-generated PCM, written to an output `AudioQueue` carrying an `ATAudioTap`
+built for the microphone PID (`-3`), reaches the cellular uplink and is audible to the far end.
+Format under test was 44.1 kHz mono Float32.
+
+Not yet established:
+
+- Streaming live, arriving audio rather than a locally generated tone. Same path, but the timing
+  behaviour under a network jitter buffer is untested.
+- Whether the device's own microphone is mixed in or replaced. It could not be tested here because
+  this device's microphone is dead. TrollRecorder's `requestMuteExistingUplinks` alongside its
+  uplink playback suggests the real microphone has to be muted deliberately.
+- Latency, and behaviour on an incoming call, which needs healthy hardware.
+
+### The original tool description follows
 
 ### Why this is worth attempting
 

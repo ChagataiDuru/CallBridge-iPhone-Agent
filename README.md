@@ -22,7 +22,7 @@ was added, and licensing.
 
 ## Status — 23 September 2026
 
-Four of the early technical risks are settled on real hardware:
+Five of the early technical risks are settled on real hardware:
 
 1. **Call events.** Incoming calls, the caller's number, and the `Incoming → Answered → Ended`
    transitions are captured through CoreTelephony.
@@ -33,6 +33,8 @@ Four of the early technical risks are settled on real hardware:
    screen: `ringing → active` in **54 ms**, `active → ended` in **109 ms**.
 4. **Remote control over the network.** `callbridge-agent` drove two real calls for a paired client
    on another machine, publishing every state change exactly once.
+5. **Uplink injection.** Software-generated audio written to the cellular uplink was heard by the
+   far end — the capability the whole product depends on.
 
 Current work is hardening that agent — TLS, reconnection, log rotation — and then the Android
 client. The control protocol is [docs/PROTOCOL.md](docs/PROTOCOL.md).
@@ -41,9 +43,10 @@ The reference iPhone 7's audio IC has failed, which shapes what can be tested he
 calls carry no audio and offer no route selection, while outgoing calls work normally over a
 Bluetooth headset. Capture was therefore verified on an outgoing call, which exercises the same tap.
 
-The project's biggest open risk remains **uplink injection** — whether audio from Android can be
-pushed into the cellular uplink. Nothing in this repo should assume it works. It has not been
-attempted yet, but it is testable on this device, because outgoing calls have a working audio path.
+**Uplink injection works.** The project's central risk is resolved: a tone written by software was
+heard by the person on the other end of a live call, with the Bluetooth headset disconnected and
+both the internal speaker and microphone dead, so no acoustic path existed. Real two-way audio over
+the network is achievable; what remains is streaming live frames rather than a generated tone.
 
 Full verification matrix: [docs/STATUS.md](docs/STATUS.md).
 
@@ -57,6 +60,7 @@ All tools build into a single rootless `.deb` and install to `/var/jb/usr/local/
 | `call-monitor` | Streams CoreTelephony and CallKit call events |
 | `call-control` | `status`, `answer`, `hangup` — emits a single JSON object |
 | `call-recorder` | Records the `speaker` (downlink) or `microphone` (uplink) channel to CAF |
+| `uplink-player` | Writes a generated tone into the cellular uplink — the injection experiment |
 | `audio-recorder` / `audio-player` / `audio-mixer` | Upstream general-purpose audio utilities |
 | `dtmf-decoder` | Upstream DTMF decoder |
 
