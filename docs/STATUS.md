@@ -1,6 +1,6 @@
 # Project status and evidence
 
-Last updated: **19 September 2026**
+Last updated: **23 September 2026**
 
 ## Verification matrix
 
@@ -11,13 +11,13 @@ Last updated: **19 September 2026**
 | Call state transitions | Verified | `Incoming → Answered → Incoming Ended` | Reduce to a single state machine |
 | Receive CallKit events | Verified | CallKit notifications for the same call | Correlate with CoreTelephony |
 | Capture downlink/far-end audio | Verified | 29.234 s CAF; confirmed by listening | Try live framing |
-| Capture microphone/uplink audio | Blocked by hardware | CB-002 produced header-only CAF files because the call carried no audio in either direction | Repeat on a device with a working audio path |
+| Capture microphone/uplink audio | Blocked by hardware | CB-002, twice: header-only CAF files, and a Bluetooth route does not feed the tap either | Repeat on a device with a working audio path |
 | Answer a call programmatically | Verified | CB-003: `ringing → active` in 54 ms, stable | Expose as an agent command |
 | Hang up a call programmatically | Verified | CB-003: `active → ended` in 109 ms | Expose as an agent command |
 | Inject Android audio into the uplink | Critical research, blocked by hardware | The current CLI only captures | Validate an audio tap/output path once audio works |
-| Local network control channel | Design complete | [PROTOCOL.md](PROTOCOL.md) | Implement the agent's NDJSON listener |
+| Local network control channel | Verified | CB-004: paired client received live events and drove two calls | Harden: TLS, reconnection |
 | Live downlink streaming | Design | Capture-to-file is proven | Publish PCM frames to a socket |
-| Persistence across reboots | Design | A rootless LaunchDaemon is viable | Prepare the `callbridge-agent` plist |
+| Persistence across reboots | Implemented | `com.callbridge.agent` LaunchDaemon, `RunAtLoad` + `KeepAlive` | Confirm across a reboot; add log rotation |
 | Stock Android client | Design | Not implemented yet | Kotlin foreground service + Compose screen |
 | Reachability over the iPhone hotspot | Pending | Local Wi-Fi/SSH works | Hotspot routing test matrix |
 
@@ -77,6 +77,21 @@ Consequences:
   Android client — remains fully testable, which is why those are being built first.
 
 Resolving it needs microsoldering repair or a second iPhone 7.
+
+## Agent end to end — 23 September 2026
+
+`callbridge-agent` handled two full incoming calls for a client on the Mac (test CB-004): live
+`call.state` events over the network, `answer` and `hangup` issued remotely, the phone never
+touched. Each state was published exactly once per call, which is the de-duplication holding
+against CoreTelephony's repeated identification notifications.
+
+That closes the part of phase 3 that does not involve audio. What remains before the Android client
+is hardening rather than capability: TLS, reconnection behavior, and log rotation.
+
+A Bluetooth headset was used, which also settled the capture question: it restores call audio by
+routing around the failed audio IC, and a single-channel `call-recorder speaker` run during an
+audible call still produced nothing. The `ATAudioTap` path follows the internal audio route, so no
+accessory works around the fault. Audio capture needs different hardware, full stop.
 
 ## Implications for the implementation
 

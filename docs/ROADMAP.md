@@ -58,9 +58,9 @@ none of it depends on the failed audio hardware.
 7. Add log rotation. Restart-after-crash is handled by the daemon's `KeepAlive`.
 8. Stream downlink PCM live — blocked on hardware, last.
 
-Verified on the device so far: the agent listens, a client pairs over HMAC and receives `hello`,
-`auth.result`, `call.snapshot` and the keepalive pings. Delivering a real `call.state` event and
-executing a command through the agent is still untested — it needs an incoming call.
+Verified on the device (CB-004): a paired client receives live `call.state` events and answers and
+ends real calls through the agent. What is left in this phase is hardening — TLS, reconnection and
+log rotation — not capability.
 
 Success criterion: without opening any app UI, the service starts after a jailbreak and forwards an
 incoming call to the network client.

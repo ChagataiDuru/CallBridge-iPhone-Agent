@@ -36,16 +36,21 @@ are under `evidence/sanitized/2026-09-18-incoming-call/`.
 
 ## CB-002 — Simultaneous speaker + microphone capture
 
-Date attempted: **19 September 2026**  
+Date attempted: **19 and 23 September 2026**  
 Result: **Blocked — cannot be validated on this device**
 
-Both recorders started correctly and both produced header-only 4 KB CAF files, because the call
-carried no audio in either direction: the device's audio IC has failed (see
-[STATUS.md](STATUS.md#device-audio-fault--19-september-2026)). The run therefore says nothing about
-the capture path, and the test has to be repeated on a device with working audio before the
-microphone/uplink capability can be called verified.
+On 19 September both recorders started correctly and both produced header-only 4 KB CAF files,
+because the call carried no audio in either direction: the device's audio IC has failed (see
+[STATUS.md](STATUS.md#device-audio-fault--19-september-2026)).
 
-The procedure below is unchanged and still the one to run.
+On 23 September the test was retried with a Bluetooth headset, which restores usable call audio by
+routing around the failed audio IC. A single-channel control run — `call-recorder speaker` alone,
+during a call that both parties could hear — still produced a 4 KB header and no audio data. So the
+`ATAudioTap` capture path follows the device's internal audio route and a Bluetooth bypass does not
+feed it. Capture cannot be validated on this device by any route available to us, and the
+simultaneous dual-tap question stays open because there is no point testing it here.
+
+The procedure below is unchanged and is the one to run on a device with working audio.
 
 ### Copying the helpers to the iPhone
 
@@ -152,3 +157,40 @@ A result of `call_dropped_after_answer` means `CTCallAnswer` reached the modem b
 torn down before it stayed active; record `observedStates` and `activeForMs` and compare them with
 the `call-monitor` log, because that is the signature of the call being answered outside
 `callservicesd` rather than of a command that failed to arrive.
+
+## CB-004 — Call control through the agent
+
+Date: **23 September 2026**  
+Result: **Pass**
+
+The first end-to-end run of `callbridge-agent`: a client on the Mac paired over the network,
+received live call events, and answered and ended two calls without the phone being touched.
+
+### Procedure
+
+1. The agent ran as the `com.callbridge.agent` LaunchDaemon.
+2. `scripts/mac/agent-probe.py <iphone-ip> <token>` connected from the Mac.
+3. A Bluetooth headset was paired so the call audio was audible.
+4. For each of two incoming calls: `a` to answer, talk, `h` to hang up.
+
+### Results
+
+| Call | `answer` | `hangup` |
+|---|---|---|
+| `A3B13B03` | `ringing → active`, 176 ms | `active → ended`, 296 ms |
+| `A87EE6F7` | `ringing → active`, 124 ms | `active → ended`, 427 ms |
+
+- Every state was published exactly once per call, so the de-duplication holds against the repeated
+  `kCTCallIdentificationChangeNotification` that CoreTelephony emits for one state.
+- Outgoing calls dialled on the phone were reported as `dialing → active → ended`.
+- Pairing, `hello`, `auth.result`, `call.snapshot` and the keepalive all behaved as specified.
+
+Two defects showed up in the output and were fixed afterwards: an `unknown` state was published
+ahead of the real one for outgoing calls, and the address changed from local format to E.164
+mid-call.
+
+Command latency through the agent is several times the ~54 ms measured for the CLI in CB-003. The
+agent resolves a command when the CoreTelephony notification arrives or on its 100 ms tick,
+whichever comes first, so the figure includes notification delivery and tick granularity. It is
+comfortably below anything a user would notice, but it is not the same measurement as CB-003 and
+should not be compared with it directly.

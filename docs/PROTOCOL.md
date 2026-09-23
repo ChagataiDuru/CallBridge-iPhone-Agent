@@ -62,12 +62,21 @@ The agent publishes exactly these states, which are the same vocabulary `call-co
 | `active` | Call answered and in progress |
 | `ended` | Call finished normally |
 | `dropped` | Call interrupted by the network or the modem |
-| `dialing` | Outgoing call initiated (not used in v1, reserved) |
-| `unknown` | State could not be determined |
+| `dialing` | Outgoing call initiated |
+| `unknown` | State could not be determined. Never published; see below |
 
-The canonical transition sequence is `ringing → active → ended`. The agent de-duplicates
-CoreTelephony notifications on `callId + state`, so the client never receives the same state twice
-for the same call and can treat every `call.state` message as a real change.
+The canonical sequence for an incoming call is `ringing → active → ended`; an outgoing call dialled
+on the phone itself is reported as `dialing → active → ended`. The agent de-duplicates CoreTelephony
+notifications on `callId + state`, so the client never receives the same state twice for the same
+call and can treat every `call.state` message as a real change.
+
+Two things the agent normalizes, so that clients do not have to:
+
+- `unknown` is never published. CoreTelephony's first notification for a call often arrives before
+  the call has a status; the agent holds it back until a real state appears.
+- The same call is announced first in local format (`05XXXXXXXXX`) and then in E.164
+  (`+905XXXXXXXXX`). Once a fully qualified address has been seen, it is kept, so `address` does not
+  change under the client mid-call.
 
 ## Messages from the agent
 
@@ -76,7 +85,7 @@ for the same call and can treat every `call.state` message as a real change.
 Sent immediately on connect, before authentication.
 
 ```json
-{"type":"hello","protocolVersion":1,"agentVersion":"0.4","device":"iPhone9,3","nonce":"6f1c…","authRequired":true,"timestamp":"2026-09-19T19:34:41.204Z"}
+{"type":"hello","protocolVersion":1,"agentVersion":"0.6","device":"iPhone9,3","nonce":"6f1c…","authRequired":true,"timestamp":"2026-09-19T19:34:41.204Z"}
 ```
 
 `nonce` is 32 random bytes, hex encoded, fresh for every connection. If `protocolVersion` is not

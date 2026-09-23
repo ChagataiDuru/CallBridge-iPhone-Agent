@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 static const int kProtocolVersion = 1;
-static NSString *const kAgentVersion = @"0.4";
+static NSString *const kAgentVersion = @"0.6";
 
 static const NSUInteger kMaxLineLength = 64 * 1024;
 static const NSTimeInterval kAuthTimeout = 5.0;
@@ -851,10 +851,33 @@ static void TelephonyEventCallback(CFNotificationCenterRef center, void *observe
     if (callID.length == 0 || state.length == 0)
         return;
 
+    /*
+     * CoreTelephony's first notification for a call can arrive before it has a status. Publishing
+     * that would push an "unknown" transition to every client for every outgoing call, so hold it
+     * back and wait for the real state; only the address is worth keeping from it.
+     */
+    if ([state isEqualToString:@"unknown"]) {
+        [_calls[callID] addEntriesFromDictionary:info];
+        return;
+    }
+
     NSMutableDictionary *entry = _calls[callID];
     if (!entry) {
         entry = [NSMutableDictionary dictionary];
         _calls[callID] = entry;
+    }
+
+    /*
+     * The same call is announced first in local format (05XXXXXXXXX) and then in E.164
+     * (+905XXXXXXXXX). Keep the fully qualified one so the address does not change under the
+     * client mid-call.
+     */
+    NSString *incoming = info[@"address"];
+    NSString *known = entry[@"address"];
+    if (incoming && [known hasPrefix:@"+"] && ![incoming hasPrefix:@"+"]) {
+        NSMutableDictionary *withoutAddress = [info mutableCopy];
+        [withoutAddress removeObjectForKey:@"address"];
+        info = withoutAddress;
     }
     [entry addEntriesFromDictionary:info];
 
