@@ -1132,6 +1132,12 @@ int main(int argc, const char *argv[]) {
         NSArray<NSString *> *arguments = [[NSProcessInfo processInfo].arguments
             subarrayWithRange:NSMakeRange(1, MAX(argc - 1, 0))];
 
+        if ([arguments containsObject:@"--print-token"] && geteuid() != 0) {
+            fprintf(stderr, "callbridge-agent: printing the pairing token requires root; "
+                            "run sudo /var/jb/usr/local/bin/callbridge-agent --print-token\n");
+            return 1;
+        }
+
         NSError *error = nil;
         NSString *token = LoadOrCreateToken(&error);
         if (!token) {
